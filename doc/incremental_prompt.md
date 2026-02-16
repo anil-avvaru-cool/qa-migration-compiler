@@ -110,24 +110,3 @@ Provide:
 * Recommended next step
 
 ---
-
-### Usage Example
-
-Replace:
-
-```
-<TARGET_FILE_NAME>
-```
-
-With:
-
-* `base_parser.py`
-* `java_parser.py`
-* `symbol_table.py`
-* `call_graph_builder.py`
-* etc.
-
-Everything else remains reusable.
-
----
-
