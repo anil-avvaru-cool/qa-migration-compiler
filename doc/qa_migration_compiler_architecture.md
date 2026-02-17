@@ -3011,6 +3011,7 @@ qa-migration-compiler/
 │     │     ├── models.py         # (your ASTNode, ASTTree)
 │     │     ├── builder.py
 │     │     ├── hasher.py
+│     │     ├── index.py          # For parent lookup
 │     │     └── metrics.py
 │     │
 │     ├── analysis/               # Static analysis modules
