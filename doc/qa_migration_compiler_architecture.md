@@ -820,129 +820,184 @@ Similar to:
 ```python
 
 """
-AST domain models for static analysis.
+Canonical AST Models
 
-Purpose:
-- Provide language-agnostic AST representations
-- Preserve traceability to source files
-- Act as a stable contract between parsing and analysis layers
+Layer Responsibility:
+- Define language-agnostic AST structure
+- Preserve structural integrity
+- Provide safe JSON-serializable models
+- Enforce deterministic ID discipline
+- Maintain parent-child consistency
+
+Non-Goals:
+- No semantic logic
+- No graph building
+- No symbol resolution
+- No optimization
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-import uuid
-from typing import Any, Dict, List, Optional, Generator
-from pydantic import BaseModel, Field, TypeAdapter, PrivateAttr
+
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, model_validator
+import logging
+
+logger = logging.getLogger(__name__)
 
 
-class SourceLocation(BaseModel):
+# ---------------------------------------------------------
+# AST Location
+# ---------------------------------------------------------
+
+class ASTLocation(BaseModel):
+    """
+    Represents source code position.
+    """
+
+    file_path: Optional[str] = None
     start_line: Optional[int] = None
-    end_line: Optional[int] = None
     start_column: Optional[int] = None
+    end_line: Optional[int] = None
     end_column: Optional[int] = None
 
+    class Config:
+        frozen = True
+
+
+# ---------------------------------------------------------
+# AST Node
+# ---------------------------------------------------------
 
 class ASTNode(BaseModel):
     """
-    Canonical normalized AST node used across entire analysis pipeline.
+    Canonical AST Node.
+
+    Structural only.
+    Language-agnostic.
     """
 
-    # ---------------------------------------------------------
-    # Identity
-    # ---------------------------------------------------------
-
-    node_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    node_type: str
+    id: str
+    type: str
     name: Optional[str] = None
 
-    # ---------------------------------------------------------
-    # Structure
-    # ---------------------------------------------------------
-
+    parent_id: Optional[str] = None
     children: List["ASTNode"] = Field(default_factory=list)
 
-    # ---------------------------------------------------------
-    # Source Mapping
-    # ---------------------------------------------------------
+    location: Optional[ASTLocation] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    location: Optional[SourceLocation] = None
+    class Config:
+        arbitrary_types_allowed = False
+        validate_assignment = True
 
-    # ---------------------------------------------------------
-    # Raw Parser Attributes
-    # ---------------------------------------------------------
+    # -------------------------
+    # Structural Safeguards
+    # -------------------------
 
-    attributes: Dict[str, Any] = Field(default_factory=dict)
+    @model_validator(mode="after")
+    def validate_structure(self):
+        """
+        Ensures no silent structural corruption.
+        """
 
-    # ---------------------------------------------------------
-    # Semantic Extensions (Future-Proof)
-    # ---------------------------------------------------------
+        # ID must exist
+        if not self.id:
+            raise ValueError("ASTNode.id cannot be empty")
 
-    modifiers: List[str] = Field(default_factory=list)
-    annotations: List[str] = Field(default_factory=list)
+        # type must exist
+        if not self.type:
+            raise ValueError("ASTNode.type cannot be empty")
 
-    scope_id: Optional[str] = None        # Symbol table scope reference
-    symbol_ref: Optional[str] = None     # Link to resolved symbol
-    type_hint: Optional[str] = None      # Optional type info
+        # Children must not reference self
+        for child in self.children:
+            if child.id == self.id:
+                raise ValueError(f"Node {self.id} cannot be its own child")
 
-    # ---------------------------------------------------------
-    # Private Parent (Not Serialized)
-    # ---------------------------------------------------------
+            if child.parent_id and child.parent_id != self.id:
+                raise ValueError(
+                    f"Child {child.id} parent_id mismatch (expected {self.id})"
+                )
 
-    _parent: Optional["ASTNode"] = PrivateAttr(default=None)
+        return self
 
-    # ---------------------------------------------------------
-    # Parent Handling
-    # ---------------------------------------------------------
-
-    @property
-    def parent(self) -> Optional["ASTNode"]:
-        return self._parent
-
-    def set_parent(self, parent: Optional["ASTNode"]) -> None:
-        self._parent = parent
+    # -------------------------
+    # Safe Child Attachment
+    # -------------------------
 
     def add_child(self, child: "ASTNode") -> None:
-        child.set_parent(self)
+        """
+        Safely attach a child node.
+        Ensures parent_id consistency.
+        """
+        if child.id == self.id:
+            raise ValueError("Cannot attach node to itself")
+
+        child.parent_id = self.id
         self.children.append(child)
 
-    # ---------------------------------------------------------
-    # Traversal Utilities
-    # ---------------------------------------------------------
+        logger.debug(
+            f"[AST] Attached child {child.id} to parent {self.id}"
+        )
 
-    def walk(self) -> Generator["ASTNode", None, None]:
-        yield self
+    # -------------------------
+    # Traversal
+    # -------------------------
+
+    def walk(self) -> List["ASTNode"]:
+        """
+        Depth-first traversal.
+        """
+        nodes = [self]
         for child in self.children:
-            yield from child.walk()
-
-    def find_by_type(self, node_type: str) -> List["ASTNode"]:
-        return [n for n in self.walk() if n.node_type == node_type]
-
-    def ancestors(self) -> Generator["ASTNode", None, None]:
-        current = self.parent
-        while current:
-            yield current
-            current = current.parent
-
-    # ---------------------------------------------------------
-    # Safe Serialization
-    # ---------------------------------------------------------
-
-    def model_dump(self, *args, **kwargs):
-        kwargs.setdefault("exclude", {"_parent"})
-        return super().model_dump(*args, **kwargs)
+            nodes.extend(child.walk())
+        return nodes
 
 
+# Required for forward reference resolution
 ASTNode.model_rebuild()
 
 
-class ASTTree(BaseModel): 
+# ---------------------------------------------------------
+# AST Tree
+# ---------------------------------------------------------
+
+class ASTTree(BaseModel):
     """
-    Root container for a parsed source file.
+    Represents a full file AST.
     """
+
+    root: ASTNode
     language: str
     file_path: str
-    root: ASTNode
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        validate_assignment = True
+
+    @model_validator(mode="after")
+    def validate_root(self):
+        if not self.root:
+            raise ValueError("ASTTree must have a root node")
+
+        if not self.file_path:
+            raise ValueError("ASTTree.file_path cannot be empty")
+
+        return self
+
+    # -------------------------
+    # Utility APIs
+    # -------------------------
+
+    def walk(self) -> List[ASTNode]:
+        return self.root.walk()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Deterministic JSON-safe serialization.
+        """
+        return self.model_dump()
+
+    def node_count(self) -> int:
+        return len(self.walk())
 
 
 ```

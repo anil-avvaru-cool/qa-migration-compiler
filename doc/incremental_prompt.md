@@ -1,111 +1,62 @@
-Below is a **generic, reusable, concise prompt template**.
-You can change only the file name (e.g., `base_parser.py`, `java_parser.py`, `symbol_table.py`) and reuse everything else.
+---
+
+**Task:** Generate `java_parser.py` for the IR Generation Engine.
 
 ---
 
-# ✅ Reusable Engineering Prompt Template
+### Requirements
 
-**Task:** Generate `<TARGET_FILE_NAME>` for the IR Generation Engine.
-
----
-
-## 1️⃣ Pre-Implementation Discipline
-
-* Analyze all prior architectural context carefully.
-* Ask clarifying questions only if necessary to prevent structural mistakes.
-* Explicitly list assumptions.
-* Explicitly define what is out of scope for MVP.
+* Analyze prior architecture context before coding.
+* Ask clarifying questions only if necessary.
+* State assumptions explicitly.
+* Define MVP scope and what is out of scope.
 
 ---
 
-## 2️⃣ Architectural Constraints
+### Architecture Rules
 
-* Follow the established git folder structure.
-* Respect strict layered architecture.
-* Do NOT mix responsibilities across layers.
-* This file must only handle its intended concern.
-* No silent coupling with graph builders or symbol resolution unless explicitly required.
-
----
-
-## 3️⃣ MVP Guidelines
-
-* Implement only what is required for MVP.
-* Keep architecture extensible.
-* If extensibility is not required for MVP, explicitly justify.
-* Avoid over-engineering.
-* No premature optimizations.
+* Follow existing git folder structure.
+* Respect strict layer separation.
+* Implement only this file’s responsibility.
+* Do not mix graph building, symbol resolution, or semantic logic unless explicitly required.
 
 ---
 
-## 4️⃣ Structural & Accuracy Requirements
+### MVP Principles
 
-* Carefully align with previously discussed AST/IR examples (e.g., OrderService via javalang).
-* Do not drop nodes or flatten structure silently.
-* Preserve:
-
-  * Node types
-  * Source location
-  * Relationships
-  * Metadata
-* Ensure compatibility with downstream graph builders.
+* Build only what is required.
+* Keep design extensible but avoid over-engineering.
+* Justify if extensibility is unnecessary for MVP.
 
 ---
 
-## 5️⃣ Modeling & Validation
+### Technical Standards
 
-* Use strongly typed models (Pydantic preferred).
-* Ensure models are JSON serializable.
-* Enforce validation where appropriate.
-* Avoid global mutable state.
-
----
-
-## 6️⃣ Logging & Observability
-
-* Use structured logging (no print statements).
-* Log:
-
-  * File start/end
-  * Node creation
-  * Relationship linking
-  * Validation failures
-  * Error conditions
-* Include contextual metadata (file path, node type, IDs).
-* Logging should support large-scale troubleshooting (1000+ files).
+* Preserve structural integrity (no silent node dropping).
+* Use typed models (Pydantic preferred).
+* Ensure JSON serializability.
+* No global mutable state.
+* Include structured logging (file start/end, node creation, errors).
+* Ensure deterministic or clearly documented temporary IDs.
 
 ---
 
-## 7️⃣ Stability & Determinism
+### Non-Goals (Unless Explicitly Required)
 
-* Node IDs must be deterministic OR clearly marked as temporary.
-* If using UUID for MVP, document limitation.
-* Mention future deterministic strategy if applicable.
-
----
-
-## 8️⃣ Explicit Non-Goals
-
-Unless explicitly required, do NOT implement:
-
-* Call Graph
-* CFG
-* DFG
+* Call Graph / CFG / DFG
 * Dependency Graph
 * Symbol resolution
 * Interprocedural analysis
-* Optimization passes
+* Optimization logic
 
 ---
 
-## 9️⃣ Deliverables
-
-Provide:
+### Deliverables
 
 * Assumptions
-* MVP scope clarification
-* Full `<TARGET_FILE_NAME>` implementation
-* Design explanation (brief)
+* MVP clarification
+* Full `java_parser.py` implementation
+* Brief design explanation
 * Known limitations
 * Recommended next step
 
