@@ -1,141 +1,148 @@
-"""
-parser/java/java_ast_adapter.py
-
-Adapts javalang AST into canonical ASTTree.
-
-Responsibility:
-- Traverse javalang AST
-- Convert every node into canonical ASTNode
-- Preserve structural integrity
-- No semantic logic
-"""
-
-from __future__ import annotations
+# src/adapters/java_ast_adapter.py
 
 import logging
-from typing import Any
+from typing import Dict, Any, List
 
-import javalang
+from javalang.tree import Node as JavaNode
+from javalang.tree import CompilationUnit
 
-from src.ast.builder import ASTBuilder
-from src.ast.models import ASTTree
+from src.ast.models import ASTNode, ASTTree
+
 
 logger = logging.getLogger(__name__)
 
 
 class JavaASTAdapter:
     """
-    Converts javalang AST into canonical ASTTree.
+    Converts javalang CompilationUnit into internal ASTTree.
+
+    Responsibilities:
+        - Traverse javalang AST
+        - Create ASTNode instances
+        - Wire parent-child relationships
+        - Generate deterministic IDs
+        - Preserve full structure (no node dropping)
+
+    Non-Goals:
+        - Graph building
+        - Symbol resolution
+        - Semantic analysis
+        - Optimization
     """
 
     def __init__(self) -> None:
-        self._builder = ASTBuilder()
-        logger.debug("JavaASTAdapter initialized")
+        self._id_counter: int = 0
+        self._nodes_index: Dict[str, ASTNode] = {}
 
-    # ------------------------------------------------------------------
+    # -----------------------------
     # Public API
-    # ------------------------------------------------------------------
+    # -----------------------------
 
-    def adapt(self, compilation_unit: javalang.tree.CompilationUnit) -> ASTTree:
+    def adapt(
+        self,
+        compilation_unit: CompilationUnit,
+        file_path: str,
+    ) -> ASTTree:
         """
-        Entry point for adapting javalang AST into canonical ASTTree.
+        Convert CompilationUnit into ASTTree.
+
+        Args:
+            compilation_unit: Root javalang node
+            file_path: Source file path
+
+        Returns:
+            ASTTree
         """
 
-        logger.info("Starting Java AST adaptation")
+        logger.info("AST adaptation started: %s", file_path)
 
-        if compilation_unit is None:
-            raise ValueError("Compilation unit cannot be None")
+        self._reset_state()
 
         root_node = self._convert_node(compilation_unit, parent=None)
 
-        tree = self._builder.build_tree(
-            root_node,
+        logger.info("AST adaptation completed: %s", file_path)
+
+        return ASTTree(
+            root=root_node,
             language="java",
             file_path=file_path,
         )
 
+    # -----------------------------
+    # Internal Helpers
+    # -----------------------------
 
-        logger.info(
-            "Java AST adaptation completed successfully total_nodes=%d",
-            len(tree.nodes),
+    def _reset_state(self) -> None:
+        self._id_counter = 0
+        self._nodes_index.clear()
+
+    def _next_id(self) -> str:
+        node_id = f"n{self._id_counter}"
+        self._id_counter += 1
+        return node_id
+
+    def _convert_node(
+        self,
+        java_node: Any,
+        parent: ASTNode | None,
+    ) -> ASTNode:
+        """
+        Recursively convert javalang node to ASTNode.
+        """
+
+        if not isinstance(java_node, JavaNode):
+            raise TypeError(
+                f"Expected JavaNode, got {type(java_node)}"
+            )
+
+        node_id = self._next_id()
+
+        ast_node = ASTNode(
+            id=node_id,
+            type=type(java_node).__name__,
+            properties=self._extract_properties(java_node),
+            children=[],
         )
 
-        return tree
+        # Parent wiring (object-based, not id-based)
+        if parent is not None:
+            ast_node._parent = parent
+            parent.children.append(ast_node)
 
-    # ------------------------------------------------------------------
-    # Internal Conversion
-    # ------------------------------------------------------------------
-
-    def _convert_node(self, node: Any, parent) -> Any:
-        """
-        Recursively convert javalang node into canonical ASTNode.
-        """
-
-        # Primitive types are treated as leaf attributes
-        if self._is_primitive(node):
-            return node
-
-        if isinstance(node, list):
-            last_created = None
-            for item in node:
-                last_created = self._convert_node(item, parent)
-            return last_created
-
-        if not isinstance(node, javalang.ast.Node):
-            # Unknown object type — preserve as attribute
-            return node
-
-        node_type = type(node).__name__
-        attributes = self._extract_attributes(node)
-
-        canonical_node = self._builder.create_node(
-            node_type=node_type,
-            attributes=attributes,
-            parent=parent,
-        )
+        self._nodes_index[node_id] = ast_node
 
         # Recursively process children
-        for attr_name in node.attrs:
-            value = getattr(node, attr_name)
+        for attr in java_node.attrs:
+            value = getattr(java_node, attr)
+
+            if isinstance(value, JavaNode):
+                self._convert_node(value, ast_node)
+
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, JavaNode):
+                        self._convert_node(item, ast_node)
+
+        return ast_node
+
+    def _extract_properties(self, java_node: JavaNode) -> Dict[str, Any]:
+        """
+        Extract non-node primitive attributes for serialization.
+        """
+
+        props: Dict[str, Any] = {}
+
+        for attr in java_node.attrs:
+            value = getattr(java_node, attr)
+
+            if isinstance(value, JavaNode):
+                continue
 
             if isinstance(value, list):
-                for child in value:
-                    self._convert_node(child, canonical_node)
-            else:
-                self._convert_node(value, canonical_node)
+                # Skip nested node lists
+                if any(isinstance(v, JavaNode) for v in value):
+                    continue
 
-        logger.debug(
-            "Adapted node type=%s id=%s",
-            node_type,
-            canonical_node.id,
-        )
+            props[attr] = value
 
-        return canonical_node
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _extract_attributes(self, node: javalang.ast.Node) -> dict:
-        """
-        Extract primitive attributes from javalang node.
-        Child nodes are excluded (handled separately).
-        """
-
-        attributes = {}
-
-        for attr in node.attrs:
-            value = getattr(node, attr)
-
-            if self._is_primitive(value):
-                attributes[attr] = value
-
-        return attributes
-
-    @staticmethod
-    def _is_primitive(value: Any) -> bool:
-        """
-        Determine if value is JSON-serializable primitive.
-        """
-
-        return isinstance(value, (str, int, float, bool)) or value is None
+        return props
