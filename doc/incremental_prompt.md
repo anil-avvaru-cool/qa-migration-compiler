@@ -1,5 +1,5 @@
 
-**Task:** Generate `ast/models.py` for the IR Generation Engine.
+**Task:** Generate `parser/java/java_ast_adapter.py` for the IR Generation Engine.
 
 ---
 
@@ -8,11 +8,16 @@
 * Analyze prior architecture context before coding.
 * Ask clarifying questions only if necessary.
 * State assumptions explicitly.
+* MVP goal Focus on parser → AST → extraction → IR json
 * Define MVP scope and what is out of scope.
+* Build only what is required, let me know if it is not required for MVP
 
 ---
 
 ### Architecture Rules
+* Respect strict layer separation.
+* Implement only this file’s responsibility.
+* Do not mix graph building, symbol resolution, or semantic logic unless explicitly required.
 
 * Follow below git folder structure which was built earlier.
 qa-migration-compiler/
@@ -168,15 +173,10 @@ qa-migration-compiler/
       ├── ir/
       ├── optimized_ir/
       └── dependency_graph.json
-* Respect strict layer separation.
-* Implement only this file’s responsibility.
-* Do not mix graph building, symbol resolution, or semantic logic unless explicitly required.
 
 ---
 
 ### MVP Principles
-
-* Build only what is required.
 * Keep design extensible but avoid over-engineering.
 * Justify if extensibility is unnecessary for MVP.
 
@@ -193,21 +193,8 @@ qa-migration-compiler/
 
 ---
 
-### Non-Goals (Unless Explicitly Required)
-
-* Call Graph / CFG / DFG
-* Dependency Graph
-* Symbol resolution
-* Interprocedural analysis
-* Optimization logic
-
----
-
 ### Deliverables
 
-* Assumptions
-* MVP clarification
-* Full `ast/models.py` implementation
-* Brief design explanation
-* Known limitations
+* Full `parser/java/java_ast_adapter.py` implementation
+* Brief Known limitations
 * Recommended next step
