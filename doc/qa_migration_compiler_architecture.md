@@ -3034,7 +3034,7 @@ qa-migration-compiler/
 │     │           └── analyzer.py
 │     │
 │     ├── extraction/             # Domain extraction layer
-│     │     ├── test_extractor.py
+│     │     ├── extractor.py
 │     │     ├── page_object_extractor.py
 │     │     ├── locator_extractor.py
 │     │     ├── assertion_mapper.py

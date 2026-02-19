@@ -1,5 +1,9 @@
 
-**Task:** Generate `parser/java/java_ast_adapter.py` for the IR Generation Engine.
+**Task:** Generate following the IR Generation Engine.
+page_object_extractor.py
+locator_extractor.py
+assertion_mapper.py
+action_mapper.py
 
 ---
 
@@ -90,7 +94,7 @@ qa-migration-compiler/
 │     │           └── analyzer.py
 │     │
 │     ├── extraction/             # Domain extraction layer
-│     │     ├── test_extractor.py
+│     │     ├── extractor.py
 │     │     ├── page_object_extractor.py
 │     │     ├── locator_extractor.py
 │     │     ├── assertion_mapper.py
@@ -195,6 +199,11 @@ qa-migration-compiler/
 
 ### Deliverables
 
-* Full `parser/java/java_ast_adapter.py` implementation
+* Full implementation for 
+      page_object_extractor.py
+      locator_extractor.py
+      assertion_mapper.py
+      action_mapper.py
+* Minimal unit test file for each
 * Brief Known limitations
 * Recommended next step
