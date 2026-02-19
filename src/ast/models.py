@@ -58,7 +58,8 @@ class ASTNode(BaseModel):
     id: str
     type: str
     name: Optional[str] = None
-
+    properties: Dict[str, Any] = Field(default_factory=dict)  # Arbitrary key-value pairs
+    
     parent_id: Optional[str] = None
     children: List["ASTNode"] = Field(default_factory=list)
 

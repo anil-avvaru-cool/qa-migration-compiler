@@ -20,6 +20,7 @@ class PageObjectExtractor:
 
         for node in self._walk(ast_tree.root):
             if node.type == "ClassDeclaration":
+                logger.debug(f"Found class: {node}")
                 pages.append({
                     "id": node.id,
                     "name": node.name,

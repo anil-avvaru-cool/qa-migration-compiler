@@ -100,6 +100,7 @@ class JavaASTAdapter:
         ast_node = ASTNode(
             id=node_id,
             type=type(java_node).__name__,
+            name = getattr(java_node, "name", None),
             properties=self._extract_properties(java_node),
             children=[],
         )
