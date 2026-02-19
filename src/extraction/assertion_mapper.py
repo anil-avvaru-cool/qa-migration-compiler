@@ -7,7 +7,6 @@ from src.ast.models import ASTTree, ASTNode
 
 logger = logging.getLogger(__name__)
 
-
 class AssertionMapper:
     """
     Extract assertion invocations (MVP).
