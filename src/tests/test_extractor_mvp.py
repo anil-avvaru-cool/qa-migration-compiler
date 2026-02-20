@@ -1,81 +1,69 @@
-import pytest
-from pathlib import Path
-
+import logging
 from src.extraction.extractor import IRExtractor
-from src.ir.models.project import Project
+from src.ast.models import ASTNode, ASTTree
+from src.parser.java.java_parser import JavaParser
+from src.parser.java.java_ast_adapter import JavaASTAdapter
 
+logger = logging.getLogger(__name__)
 
-def test_extractor_returns_project(tmp_path):
-    # Minimal Java test sample
+def test_extractor_basic_flow(tmp_path):
+
     java_code = """
-    package pages;
+    package tests;
 
-    import org.openqa.selenium.By;
-    import org.openqa.selenium.WebDriver;
+    import base.BaseTest;
+    import org.openqa.selenium.support.ui.ExpectedConditions;
+    import org.testng.Assert;
+    import org.testng.annotations.Test;
+    import pages.HomePage;
+    import pages.LoginPage;
 
-    public class LoginPage {
+    public class TC_LOGIN_VALID_001 extends BaseTest {
 
-        private WebDriver driver;
+        @Test
+        public void validLoginTest() {
 
-        private By username = By.cssSelector("#username");
-        private By password = By.cssSelector("#password");
-        private By loginButton = By.cssSelector("#login-btn");
+            String username = "testuser1";
+            String password = "Password123";
+            String expectedMessage = "Welcome testuser1";
 
-        public LoginPage(WebDriver driver) {
-            this.driver = driver;
-        }
+            driver.get(baseUrl + "/login");
 
-        public void enterUsername(String user) {
-            driver.findElement(username).sendKeys(user);
-        }
+            LoginPage loginPage = new LoginPage(driver);
+            loginPage.enterUsername(username);
+            loginPage.enterPassword(password);
+            loginPage.clickLogin();
 
-        public void enterPassword(String pass) {
-            driver.findElement(password).sendKeys(pass);
-        }
+            HomePage homePage = new HomePage(driver);
 
-        public void clickLogin() {
-            driver.findElement(loginButton).click();
-        }
+            wait.until(ExpectedConditions.visibilityOfElementLocated(
+                    homePage.getWelcomeLocator()
+            ));
 
-        public void testLogin() {
+            String actualMessage = homePage.getWelcomeMessage();
 
-            // action (should be ignored)
-            driver.findElement(By.id("username")).click();
-
-            // assertions
-            assertTrue(true);
-            Assert.assertEquals("expected", "actual");
-            assertFalse(false);
-
-            // non-assert (ignored)
-            System.out.println("Hello");
+            Assert.assertEquals(actualMessage, expectedMessage);
         }
     }
     """
 
-    file_path = tmp_path / "LoginTest.java"
+    file_path = tmp_path / "LoginPage.java"
     file_path.write_text(java_code)
 
-    extractor = IRExtractor()
-    result = extractor.extract(str(file_path))
+    parser = JavaParser()
+    adapter = JavaASTAdapter()
 
-    assert isinstance(result, Project)
-    assert result is not None
-
-
-def test_extractor_is_deterministic(tmp_path):
-    java_code = """
-    public class Sample {
-        public void testA() {}
-    }
-    """
-
-    file_path = tmp_path / "Sample.java"
-    file_path.write_text(java_code)
+    ast_tree = adapter.adapt(parser.parse(str(file_path)), str(file_path))
 
     extractor = IRExtractor()
 
-    r1 = extractor.extract(str(file_path))
-    r2 = extractor.extract(str(file_path))
+    result = extractor.extract(
+        ast_tree=ast_tree,
+        project_name="DemoProject",
+        source_language="java",
+    )
+    logger.debug(f"Extraction result: {result}")
 
-    assert r1.model_dump() == r2.model_dump()
+    assert result["project_name"] == "DemoProject"
+    assert len(result["tests"]) == 1
+    #assert result["tests"][0]["name"] == "ValidLogin"

@@ -1,11 +1,8 @@
 
 **Task:** Generate following the IR Generation Engine.
-src/ir/models/project.py
-src/ir/models/environment.py
-src/ir/models/test.py
-src/ir/models/targets.py
-src/ir/models/suite.py
-src/ir/models/data.py
+src/utils/file_utils.py
+src/utils/hashing.py
+src/utils/graph_utils.py
 
 ---
 
@@ -202,12 +199,9 @@ qa-migration-compiler/
 ### Deliverables
 
 * Full implementation for 
-      src/ir/models/project.py
-      src/ir/models/environment.py
-      src/ir/models/test.py
-      src/ir/models/targets.py
-      src/ir/models/suite.py
-      src/ir/models/data.py
-* Minimal unit test file for each
+      src/utils/file_utils.py
+      src/utils/hashing.py
+      src/utils/graph_utils.py
+* Minimal unit test file for each if required
 * Brief Known limitations
 * Recommended next step

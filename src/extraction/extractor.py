@@ -1,20 +1,11 @@
-# src/extraction/extractor.py
-
 import logging
-from typing import Optional
+from typing import Dict, List, Any
 
-from src.parser.java.java_parser import JavaParser
-from src.parser.java.java_ast_adapter import JavaASTAdapter
-
-from src.ast.models import ASTTree
-
+from src.ast.models import ASTTree, ASTNode
 from src.extraction.page_object_extractor import PageObjectExtractor
 from src.extraction.locator_extractor import LocatorExtractor
-from src.extraction.action_mapper import ActionMapper
 from src.extraction.assertion_mapper import AssertionMapper
-
-from src.ir.builder.project_ir_builder import ProjectIRBuilder
-from src.ir.models.project import Project
+from src.extraction.action_mapper import ActionMapper
 
 
 logger = logging.getLogger(__name__)
@@ -22,74 +13,102 @@ logger = logging.getLogger(__name__)
 
 class IRExtractor:
     """
-    Orchestrates:
-        Parser → AST → Domain Extraction → IR Builders
+    Extraction layer.
 
-    Responsibility:
-        - Execute extraction pipeline for a single Java file
-        - Produce IR Project model
+    Responsible for:
+    - Traversing AST
+    - Extracting domain-level structures
 
-    Non-Goals:
-        - Graph building
-        - Semantic resolution
-        - Optimization
-        - File writing
-        - Validation
+    MUST NOT:
+    - Build IR models
+    - Generate IDs
+    - Perform validation
     """
 
-    def __init__(self) -> None:
-        # No global mutable state
-        self._parser = JavaParser()
-        self._adapter = JavaASTAdapter()
+    def __init__(self):
+        self.page_extractor = PageObjectExtractor()
+        self.locator_extractor = LocatorExtractor()
+        self.assertion_mapper = AssertionMapper()
+        self.action_mapper = ActionMapper()
 
-        self._page_extractor = PageObjectExtractor()
-        self._locator_extractor = LocatorExtractor()
-        self._action_mapper = ActionMapper()
-        self._assertion_mapper = AssertionMapper()
+    def extract(
+        self,
+        ast_tree: ASTTree,
+        project_name: str,
+        source_language: str,
+    ) -> Dict[str, Any]:
 
-        self._project_builder = ProjectIRBuilder()
+        logger.info("Starting extraction for project: %s", project_name)
 
-    # ---------------------------------------------------------
-    # Public API
-    # ---------------------------------------------------------
+        extracted_tests: List[Dict] = []
+        extracted_suites: List[Dict] = []
 
-    def extract(self, file_path: str) -> Project:
-        """
-        Full MVP extraction pipeline.
+        # --- Extract targets via dedicated extractors ---
+        extracted_targets = []
+        extracted_targets.extend(self.page_extractor.extract(ast_tree))
+        extracted_targets.extend(self.locator_extractor.extract(ast_tree))
 
-        Args:
-            file_path: Path to Java test file.
+        # --- Traverse AST generically ---
+        for node in self._traverse(ast_tree.root):
 
-        Returns:
-            Project IR model (Pydantic)
-        """
+            if node.type == "test":
+                extracted_tests.append(self._extract_test(node))
 
-        logger.info("Extraction started for file: %s", file_path)
+            elif node.type == "suite":
+                extracted_suites.append(self._extract_suite(node))
 
-        # 1️⃣ Parse
-        compilation_unit = self._parser.parse(file_path)
+        extracted_project = {
+            "project_name": project_name,
+            "source_language": source_language,
+            "tests": extracted_tests,
+            "suites": extracted_suites,
+            "targets": extracted_targets,
+            "environments": [],
+        }
 
-        # 2️⃣ Adapt to canonical AST
-        ast_tree: ASTTree = self._adapter.adapt(
-            compilation_unit=compilation_unit,
-            file_path=file_path,
-        )
+        logger.info("Extraction complete for project: %s", project_name)
+        return extracted_project
 
-        # 3️⃣ Domain Extraction (MVP: sequential)
-        pages = self._page_extractor.extract(ast_tree)
-        targets = self._locator_extractor.extract(ast_tree)
-        actions = self._action_mapper.map(ast_tree)
-        assertions = self._assertion_mapper.map(ast_tree)
+    # ------------------------
+    # Internal helpers
+    # ------------------------
 
-        # 4️⃣ Build IR Project
-        project_ir = self._project_builder.build(
-            file_path=file_path,
-            pages=pages,
-            targets=targets,
-            actions=actions,
-            assertions=assertions,
-        )
+    def _traverse(self, node: ASTNode):
+        yield node
+        for child in getattr(node, "children", []):
+            yield from self._traverse(child)
 
-        logger.info("Extraction completed for file: %s", file_path)
+    def _extract_test(self, node: ASTNode) -> Dict:
 
-        return project_ir
+        steps: List[Dict] = []
+
+        for statement in getattr(node, "children", []):
+            action = self.action_mapper.map(statement)
+            if action:
+                steps.append(action)
+                continue
+
+            assertion = self.assertion_mapper.map(statement)
+            if assertion:
+                steps.append(assertion)
+
+        return {
+            "name": node.name,
+            "steps": steps,
+            "tags": getattr(node, "tags", []),
+            "environment_id": getattr(node, "environment", None),
+            "data_id": None,
+        }
+
+    def _extract_suite(self, node: ASTNode) -> Dict:
+        test_names = [
+            child.name
+            for child in getattr(node, "children", [])
+            if child.type == "test"
+        ]
+
+        return {
+            "name": node.name,
+            "tests": test_names,
+            "parent_id": getattr(node, "parent", None),
+        }
