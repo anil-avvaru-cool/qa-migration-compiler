@@ -1,6 +1,8 @@
 
 **Task:** Generate following the IR Generation Engine.
-src/core/pipeline.py
+src/utils/file_utils.py
+src/utils/hashing.py
+src/utils/graph_utils.py
 
 ---
 
@@ -18,6 +20,9 @@ src/core/pipeline.py
 ### Architecture Rules
 * Respect strict layer separation.
 * Implement only this file’s responsibility.
+* Follow S.O.L.I.D principles
+* Follow Design patterns only if applicable but do not over engineer.
+
 * Follow below git folder structure which was built earlier.
 qa-migration-compiler/
 │
@@ -195,7 +200,9 @@ qa-migration-compiler/
 ### Deliverables
 
 * Full implementation for 
-      src/core/pipeline.py
+      src/utils/file_utils.py
+      src/utils/hashing.py
+      src/utils/graph_utils.py
 * Minimal unit test file for each if required
 * Brief Known limitations
 * Recommended next step
