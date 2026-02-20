@@ -178,3 +178,14 @@ class ASTTree(BaseModel):
 
     def node_count(self) -> int:
         return len(self.walk())
+
+
+CANONICAL_NODE_TYPES = {
+    "module",
+    "class",
+    "method",
+    "test",
+    "suite",
+    "block",
+    "statement",
+}

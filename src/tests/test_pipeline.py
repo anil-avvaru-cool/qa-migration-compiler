@@ -31,7 +31,7 @@ class TestIRGenerationPipeline(unittest.TestCase):
             extractor=extractor,
             ir_builder=builder,
             writer=writer,
-            validator=None,
+            # validator=None,
         )
 
         result = pipeline.run(

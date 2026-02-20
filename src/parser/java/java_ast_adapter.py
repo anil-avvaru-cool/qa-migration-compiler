@@ -1,149 +1,151 @@
-# src/adapters/java_ast_adapter.py
+from typing import Any, Dict, Optional, List
+from collections import defaultdict
 
-import logging
-from typing import Dict, Any, List
-
-from javalang.tree import Node as JavaNode
-from javalang.tree import CompilationUnit
-
-from src.ast.models import ASTNode, ASTTree
-
-
-logger = logging.getLogger(__name__)
+from src.ast.models import ASTNode, ASTLocation
 
 
 class JavaASTAdapter:
     """
-    Converts javalang CompilationUnit into internal ASTTree.
-
-    Responsibilities:
-        - Traverse javalang AST
-        - Create ASTNode instances
-        - Wire parent-child relationships
-        - Generate deterministic IDs
-        - Preserve full structure (no node dropping)
-
-    Non-Goals:
-        - Graph building
-        - Symbol resolution
-        - Semantic analysis
-        - Optimization
+    Converts Java parser AST into canonical ASTNode structure.
+    Produces canonical node types: suite | test | node
     """
 
-    def __init__(self) -> None:
-        self._id_counter: int = 0
-        self._nodes_index: Dict[str, ASTNode] = {}
+    def __init__(self):
+        self._counters = defaultdict(int)
 
-    # -----------------------------
+    # -------------------------------------------------
+    # ID Generation (Deterministic + Unique)
+    # -------------------------------------------------
+
+    def _generate_id(self, node_type: str) -> str:
+        """
+        Unique ID per node type.
+        Example:
+            suite_1
+            test_3
+            node_12
+        """
+        self._counters[node_type] += 1
+        return f"{node_type}_{self._counters[node_type]}"
+
+    # -------------------------------------------------
     # Public API
-    # -----------------------------
+    # -------------------------------------------------
 
-    def adapt(
-        self,
-        compilation_unit: CompilationUnit,
-        file_path: str,
-    ) -> ASTTree:
-        """
-        Convert CompilationUnit into ASTTree.
+    def adapt(self, parsed_root: Any) -> ASTNode:
+        return self._convert(parsed_root, parent=None)
 
-        Args:
-            compilation_unit: Root javalang node
-            file_path: Source file path
+    # -------------------------------------------------
+    # Core Recursive Conversion
+    # -------------------------------------------------
 
-        Returns:
-            ASTTree
-        """
+    def _convert(self, parsed_node: Any, parent: Optional[ASTNode]) -> ASTNode:
 
-        logger.info("AST adaptation started: %s", file_path)
-
-        self._reset_state()
-
-        root_node = self._convert_node(compilation_unit, parent=None)
-
-        logger.info("AST adaptation completed: %s", file_path)
-
-        return ASTTree(
-            root=root_node,
-            language="java",
-            file_path=file_path,
-        )
-
-    # -----------------------------
-    # Internal Helpers
-    # -----------------------------
-
-    def _reset_state(self) -> None:
-        self._id_counter = 0
-        self._nodes_index.clear()
-
-    def _next_id(self) -> str:
-        node_id = f"n{self._id_counter}"
-        self._id_counter += 1
-        return node_id
-
-    def _convert_node(
-        self,
-        java_node: Any,
-        parent: ASTNode | None,
-    ) -> ASTNode:
-        """
-        Recursively convert javalang node to ASTNode.
-        """
-
-        if not isinstance(java_node, JavaNode):
-            raise TypeError(
-                f"Expected JavaNode, got {type(java_node)}"
-            )
-
-        node_id = self._next_id()
+        canonical_type = self._map_type(parsed_node)
+        node_id = self._generate_id(canonical_type)
 
         ast_node = ASTNode(
             id=node_id,
-            type=type(java_node).__name__,
-            name = getattr(java_node, "name", None),
-            properties=self._extract_properties(java_node),
-            children=[],
+            type=canonical_type,
+            name=getattr(parsed_node, "name", None),
+            properties=self._extract_properties(parsed_node),
+            location=self._extract_location(parsed_node),
         )
 
-        # Parent wiring (object-based, not id-based)
-        if parent is not None:
-            ast_node._parent = parent
-            parent.children.append(ast_node)
+        if parent:
+            parent.add_child(ast_node)
 
-        self._nodes_index[node_id] = ast_node
-
-        # Recursively process children
-        for attr in java_node.attrs:
-            value = getattr(java_node, attr)
-
-            if isinstance(value, JavaNode):
-                self._convert_node(value, ast_node)
-
-            elif isinstance(value, list):
-                for item in value:
-                    if isinstance(item, JavaNode):
-                        self._convert_node(item, ast_node)
+        for child in self._extract_children(parsed_node):
+            self._convert(child, ast_node)
 
         return ast_node
 
-    def _extract_properties(self, java_node: JavaNode) -> Dict[str, Any]:
+    # -------------------------------------------------
+    # Canonical Type Mapping
+    # -------------------------------------------------
+
+    def _map_type(self, parsed_node: Any) -> str:
         """
-        Extract non-node primitive attributes for serialization.
+        Maps Java parser node types into canonical types.
         """
 
-        props: Dict[str, Any] = {}
+        node_class = type(parsed_node).__name__
 
-        for attr in java_node.attrs:
-            value = getattr(java_node, attr)
+        # Class → suite
+        if node_class in ("ClassDeclaration", "InterfaceDeclaration"):
+            return "suite"
 
-            if isinstance(value, JavaNode):
+        # Method with @Test annotation → test
+        if node_class == "MethodDeclaration":
+            if self._is_test_method(parsed_node):
+                return "test"
+            return "node"
+
+        return "node"
+
+    def _is_test_method(self, parsed_node: Any) -> bool:
+        annotations = getattr(parsed_node, "annotations", [])
+        for ann in annotations:
+            ann_name = getattr(ann, "name", "")
+            if ann_name.lower() == "test":
+                return True
+        return False
+
+    # -------------------------------------------------
+    # Property Extraction (Scalar Only)
+    # -------------------------------------------------
+
+    def _extract_properties(self, parsed_node: Any) -> Dict[str, Any]:
+        props = {}
+
+        for attr in dir(parsed_node):
+            if attr.startswith("_"):
                 continue
 
-            if isinstance(value, list):
-                # Skip nested node lists
-                if any(isinstance(v, JavaNode) for v in value):
-                    continue
+            value = getattr(parsed_node, attr)
 
-            props[attr] = value
+            if isinstance(value, (str, int, float, bool)):
+                props[attr] = value
 
         return props
+
+    # -------------------------------------------------
+    # Child Extraction
+    # -------------------------------------------------
+
+    def _extract_children(self, parsed_node: Any) -> List[Any]:
+        children = []
+
+        for attr in dir(parsed_node):
+            if attr.startswith("_"):
+                continue
+
+            value = getattr(parsed_node, attr)
+
+            if isinstance(value, list):
+                for item in value:
+                    if self._is_ast_like(item):
+                        children.append(item)
+
+            elif self._is_ast_like(value):
+                children.append(value)
+
+        return children
+
+    def _is_ast_like(self, obj: Any) -> bool:
+        return hasattr(obj, "__dict__")
+
+    # -------------------------------------------------
+    # Location Extraction
+    # -------------------------------------------------
+
+    def _extract_location(self, parsed_node: Any) -> Optional[ASTLocation]:
+        line = getattr(parsed_node, "line", None)
+
+        if line:
+            return ASTLocation(
+                start_line=line,
+                end_line=line
+            )
+
+        return None

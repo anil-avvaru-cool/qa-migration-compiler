@@ -1,6 +1,6 @@
 
 **Task:** Generate following the IR Generation Engine.
-src/core/pipeline.py
+src/ir/writer/file_writer.py
 
 ---
 
@@ -194,8 +194,8 @@ qa-migration-compiler/
 
 ### Deliverables
 
-* Full implementation for 
-      src/core/pipeline.py
+* Full implementation for following
+      src/ir/writer/file_writer.py
 * Minimal unit test file for each if required
 * Brief Known limitations
 * Recommended next step

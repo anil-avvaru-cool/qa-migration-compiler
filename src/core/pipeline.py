@@ -9,7 +9,7 @@ from src.parser.java.java_ast_adapter import JavaASTAdapter
 from src.extraction.extractor import IRExtractor
 from src.ir.builder.project_ir_builder import ProjectIRBuilder
 from src.ir.writer.file_writer import FileWriter
-from src.ir.validator.schema_validator import SchemaValidator
+# from src.ir.validator.schema_validator import SchemaValidator
 from src.ir.models.project import ProjectIR
 
 
@@ -30,14 +30,14 @@ class IRGenerationPipeline:
         extractor: IRExtractor,
         ir_builder: ProjectIRBuilder,
         writer: FileWriter,
-        validator: Optional[SchemaValidator] = None,
+        # validator: Optional[SchemaValidator] = None,
     ):
         self.parser = parser
         self.adapter = adapter
         self.extractor = extractor
         self.ir_builder = ir_builder
         self.writer = writer
-        self.validator = validator
+        # self.validator = validator
 
     # -------------------------------------------------------------
     # PUBLIC API
@@ -77,7 +77,10 @@ class IRGenerationPipeline:
             )
 
             # 3️⃣ Extract Domain Model
-            extraction_result = self.extractor.extract(ast_tree)
+            extraction_result = self.extractor.extract(
+                ast_tree,
+                project_name=project_name,
+                source_language=source_language,)
 
             all_tests.extend(extraction_result.tests)
             all_suites.extend(extraction_result.suites)
@@ -103,10 +106,10 @@ class IRGenerationPipeline:
         logger.info("IR build completed")
 
         # 5️⃣ Optional Schema Validation
-        if self.validator:
-            logger.info("Schema validation started")
-            self.validator.validate(project_ir)
-            logger.info("Schema validation passed")
+        # if self.validator:
+        #     logger.info("Schema validation started")
+        #     self.validator.validate(project_ir)
+        #     logger.info("Schema validation passed")
 
         # 6️⃣ Write Output
         self._write_output(project_ir, output_path)
