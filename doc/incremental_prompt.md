@@ -1,9 +1,11 @@
 
 **Task:** Generate following the IR Generation Engine.
-page_object_extractor.py
-locator_extractor.py
-assertion_mapper.py
-action_mapper.py
+src/ir/models/project.py
+src/ir/models/environment.py
+src/ir/models/test.py
+src/ir/models/targets.py
+src/ir/models/suite.py
+src/ir/models/data.py
 
 ---
 
@@ -200,10 +202,12 @@ qa-migration-compiler/
 ### Deliverables
 
 * Full implementation for 
-      page_object_extractor.py
-      locator_extractor.py
-      assertion_mapper.py
-      action_mapper.py
+      src/ir/models/project.py
+      src/ir/models/environment.py
+      src/ir/models/test.py
+      src/ir/models/targets.py
+      src/ir/models/suite.py
+      src/ir/models/data.py
 * Minimal unit test file for each
 * Brief Known limitations
 * Recommended next step

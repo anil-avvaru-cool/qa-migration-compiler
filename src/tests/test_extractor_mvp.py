@@ -8,8 +8,46 @@ from src.ir.models.project import Project
 def test_extractor_returns_project(tmp_path):
     # Minimal Java test sample
     java_code = """
-    public class LoginTest {
+    package pages;
+
+    import org.openqa.selenium.By;
+    import org.openqa.selenium.WebDriver;
+
+    public class LoginPage {
+
+        private WebDriver driver;
+
+        private By username = By.cssSelector("#username");
+        private By password = By.cssSelector("#password");
+        private By loginButton = By.cssSelector("#login-btn");
+
+        public LoginPage(WebDriver driver) {
+            this.driver = driver;
+        }
+
+        public void enterUsername(String user) {
+            driver.findElement(username).sendKeys(user);
+        }
+
+        public void enterPassword(String pass) {
+            driver.findElement(password).sendKeys(pass);
+        }
+
+        public void clickLogin() {
+            driver.findElement(loginButton).click();
+        }
+
         public void testLogin() {
+
+            // action (should be ignored)
+            driver.findElement(By.id("username")).click();
+
+            // assertions
+            assertTrue(true);
+            Assert.assertEquals("expected", "actual");
+            assertFalse(false);
+
+            // non-assert (ignored)
             System.out.println("Hello");
         }
     }
