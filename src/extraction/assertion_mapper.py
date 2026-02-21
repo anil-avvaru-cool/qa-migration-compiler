@@ -12,12 +12,12 @@ class AssertionMapper:
     Extract assertion invocations (MVP).
     """
 
-    def map(self, ast_tree: ASTTree) -> List[Dict]:
+    def map(self, ast_node: ASTNode) -> List[Dict]:
         logger.info("Assertion mapping started")
 
         assertions: List[Dict] = []
 
-        for node in self._walk(ast_tree.root):
+        for node in self._walk(ast_node):
             if node.type == "MethodInvocation":
                 member = node.properties.get("member")
 

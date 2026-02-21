@@ -16,12 +16,12 @@ class ActionMapper:
     Extract Selenium interaction methods (MVP).
     """
 
-    def map(self, ast_tree: ASTTree) -> List[Dict]:
+    def map(self, ast_node: ASTNode) -> List[Dict]:
         logger.info("Action mapping started")
 
         actions: List[Dict] = []
 
-        for node in self._walk(ast_tree.root):
+        for node in self._walk(ast_node):
             if node.type == "MethodInvocation":
                 member = node.properties.get("member")
 

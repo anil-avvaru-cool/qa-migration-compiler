@@ -9,8 +9,11 @@ from src.parser.java.java_ast_adapter import JavaASTAdapter
 from src.extraction.extractor import IRExtractor
 from src.ir.builder.project_ir_builder import ProjectIRBuilder
 from src.ir.writer.file_writer import FileWriter
-# from src.ir.validator.schema_validator import SchemaValidator
 from src.ir.models.project import ProjectIR
+from src.ast.models import ASTNode, ASTLocation, ASTTree
+
+# Phase 2 additions
+# from src.ir.validator.schema_validator import SchemaValidator
 
 
 logger = logging.getLogger(__name__)
@@ -71,26 +74,31 @@ class IRGenerationPipeline:
             compilation_unit = self.parser.parse(file_path)
 
             # 2️⃣ Adapt to Canonical AST
-            ast_tree = self.adapter.adapt(
-                compilation_unit,
-                file_path=file_path,
+            ast_node = self.adapter.adapt(
+                compilation_unit                
             )
+
+            ast_tree = ASTTree(
+                root=ast_node,
+                language=source_language,
+                file_path=file_path)
 
             # 3️⃣ Extract Domain Model
             extraction_result = self.extractor.extract(
                 ast_tree,
                 project_name=project_name,
                 source_language=source_language,)
+            logger.debug("Extraction result ***: %s", extraction_result)
 
-            all_tests.extend(extraction_result.tests)
-            all_suites.extend(extraction_result.suites)
-            all_environments.extend(extraction_result.environments)
+            all_tests.extend(extraction_result["tests"])
+            all_suites.extend(extraction_result["suites"])
+            all_environments.extend(extraction_result["environments"])
 
             logger.info(
                 "Extraction completed | tests=%d suites=%d envs=%d",
-                len(extraction_result.tests),
-                len(extraction_result.suites),
-                len(extraction_result.environments),
+                len(extraction_result["tests"]),
+                len(extraction_result["suites"]),
+                len(extraction_result["environments"]),
             )
 
         # 4️⃣ Build Project IR
