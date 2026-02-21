@@ -27,11 +27,14 @@ class ProjectIRBuilder:
         logger.info("Building ProjectIR for project: %s", project_name)
 
         project_id = deterministic_hash(f"project::{project_name}")
+        
+        # Using an f-string
+        formatted_f_string = f"{datetime.now():%Y-%m-%d %H:%M:%S}"
 
         metadata = ProjectMetadata(
             name=project_name,
             version="1.0.0",
-            generated_at=datetime.utcnow(),
+            generated_at=formatted_f_string,
             source_language=source_language,
             compiler_version=compiler_version,
         )

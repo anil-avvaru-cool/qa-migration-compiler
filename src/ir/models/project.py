@@ -6,7 +6,7 @@ from datetime import datetime
 class ProjectMetadata(BaseModel):
     name: str
     version: str = "1.0.0"
-    generated_at: datetime
+    generated_at: str
     source_language: str
     compiler_version: str
 

@@ -100,14 +100,18 @@ class IRGenerationPipeline:
                 len(extraction_result["suites"]),
                 len(extraction_result["environments"]),
             )
+        
+        test_names = [test["name"] for test in all_tests]
+        suite_names = [suite["name"] for suite in all_suites]
+        environment_names = [env["name"] for env in all_environments]
 
         # 4️⃣ Build Project IR
         project_ir = self.ir_builder.build(
             project_name=project_name,
             source_language=source_language,
-            tests=all_tests,
-            suites=all_suites,
-            environments=all_environments,
+            tests=test_names,
+            suites=suite_names,
+            environments=environment_names,
             compiler_version=compiler_version,
         )
 
@@ -120,6 +124,7 @@ class IRGenerationPipeline:
         #     logger.info("Schema validation passed")
 
         # 6️⃣ Write Output
+        logger.debug(f"ProjectIR content ***: {project_ir}")
         self._write_output(project_ir, output_path)
 
         logger.info("IR pipeline finished successfully")
