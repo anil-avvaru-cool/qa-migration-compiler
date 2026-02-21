@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # AST Location
 # ---------------------------------------------------------
 
-class ASTLocation(BaseModel):
+class ASTLocation(BaseModel, frozen=True):
     """
     Represents source code position.
     """
@@ -39,8 +39,6 @@ class ASTLocation(BaseModel):
     end_line: Optional[int] = None
     end_column: Optional[int] = None
 
-    class Config:
-        frozen = True
 
 
 # ---------------------------------------------------------

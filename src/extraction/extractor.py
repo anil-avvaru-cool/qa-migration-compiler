@@ -52,7 +52,9 @@ class IRExtractor:
         for node in self._traverse(ast_tree.root):
 
             if node.type == "test":
-                extracted_tests.append(self._extract_test(node))
+                extracted_test = self._extract_test(node)
+                logger.debug(f"Extracted test***: {extracted_test}")
+                extracted_tests.append(extracted_test)
 
             elif node.type == "suite":
                 extracted_suites.append(self._extract_suite(node))

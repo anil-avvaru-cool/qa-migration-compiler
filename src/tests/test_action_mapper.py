@@ -43,11 +43,14 @@ def test_action_mapper_extraction(tmp_path):
 
     parser = JavaParser()
     adapter = JavaASTAdapter()
+    compilation_unit = parser.parse(str(file_path))
+    logger.debug(f"Parsed CompilationUnit from action mapper: {compilation_unit}")
 
-    tree = adapter.adapt(parser.parse(str(file_path)), str(file_path))
+    ast_node = adapter.adapt(compilation_unit)
+    logger.debug(f"Adapted AST from action mapper test: {ast_node}")
 
     actionMapper = ActionMapper()
-    actions = actionMapper.map(tree)
+    actions = actionMapper.map(ast_node)
     logger.debug(f"Extracted actions: {actions}")
 
     assert len(actions) == 3
