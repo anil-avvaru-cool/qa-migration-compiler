@@ -33,7 +33,7 @@ def test_assertion_mapper_extracts_assert_methods(tmp_path):
     parser = JavaParser()
     adapter = JavaASTAdapter()
 
-    tree = adapter.adapt(parser.parse(str(file_path)), str(file_path))
+    tree = adapter.adapt(parser.parse(str(file_path)))
 
     mapper = AssertionMapper()
     assertions = mapper.map(tree)
@@ -66,8 +66,8 @@ def test_assertion_mapper_is_deterministic(tmp_path):
     adapter = JavaASTAdapter()
     mapper = AssertionMapper()
 
-    tree1 = adapter.adapt(parser.parse(str(file_path)), str(file_path))
-    tree2 = adapter.adapt(parser.parse(str(file_path)), str(file_path))
+    tree1 = adapter.adapt(parser.parse(str(file_path)))
+    tree2 = adapter.adapt(parser.parse(str(file_path)))
 
     r1 = mapper.map(tree1)   
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 
 
@@ -9,8 +9,7 @@ class StepIR(BaseModel):
     target: Optional[str] = None
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class TestIR(BaseModel):
@@ -22,5 +21,4 @@ class TestIR(BaseModel):
     tags: List[str] = Field(default_factory=list)
     steps: List[StepIR] = Field(default_factory=list)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)

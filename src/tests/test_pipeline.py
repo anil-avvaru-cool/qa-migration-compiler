@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock
 
 from src.core.pipeline import IRGenerationPipeline
+from src.ast.models import ASTNode
 
 
 class TestIRGenerationPipeline(unittest.TestCase):
@@ -15,12 +16,20 @@ class TestIRGenerationPipeline(unittest.TestCase):
         writer = Mock()
 
         parser.parse.return_value = "compilation_unit"
-        adapter.adapt.return_value = "ast_tree"
+        
+        # Create a proper ASTNode mock instead of string
+        ast_node = ASTNode(
+            id="test_root",
+            type="suite",
+            name="TestClass"
+        )
+        adapter.adapt.return_value = ast_node
 
-        extraction_result = Mock()
-        extraction_result.tests = ["T1"]
-        extraction_result.suites = ["S1"]
-        extraction_result.environments = ["E1"]
+        extraction_result = {
+            "tests": [{"name": "T1"}],
+            "suites": [{"name": "S1"}],
+            "environments": [{"name": "E1"}],
+        }
         extractor.extract.return_value = extraction_result
 
         builder.build.return_value = Mock(model_dump=lambda: {"project": "ok"})

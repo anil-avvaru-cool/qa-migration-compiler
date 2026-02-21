@@ -19,7 +19,7 @@ class PageObjectExtractor:
         pages: List[Dict] = []
 
         for node in self._walk(ast_tree.root):
-            if node.type == "ClassDeclaration":
+            if node.type == "suite":
                 logger.debug(f"Found class: {node}")
                 pages.append({
                     "id": node.id,

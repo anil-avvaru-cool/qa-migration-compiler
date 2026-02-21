@@ -33,6 +33,7 @@ class JavaASTAdapter:
     # -------------------------------------------------
 
     def adapt(self, parsed_root: Any) -> ASTNode:
+        self._counters = defaultdict(int)  # Reset counters for deterministic IDs
         return self._convert(parsed_root, parent=None)
 
     # -------------------------------------------------

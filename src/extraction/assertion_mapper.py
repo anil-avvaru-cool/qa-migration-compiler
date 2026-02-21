@@ -16,16 +16,24 @@ class AssertionMapper:
         logger.info("Assertion mapping started")
 
         assertions: List[Dict] = []
+        seen_ids = set()
+        seen_types = set()
 
         for node in self._walk(ast_node):
-            if node.type == "MethodInvocation":
-                member = node.properties.get("member")
+            # Skip if we've already processed this exact node
+            if node.id in seen_ids:
+                continue
+                
+            member = node.properties.get("member")
 
-                if member and member.startswith("assert"):
+            if member and member.startswith("assert"):
+                # Deduplicate: count each assertion type only once
+                if member not in seen_types:
+                    seen_ids.add(node.id)
+                    seen_types.add(member)
                     assertions.append({
                         "id": node.id,
                         "assertion": member,
-                        "file_path": ast_tree.file_path,
                     })
 
         logger.info("Assertion mapping completed")

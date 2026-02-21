@@ -44,7 +44,9 @@ def test_locator_extraction(tmp_path):
     parser = JavaParser()
     adapter = JavaASTAdapter()
 
-    tree = adapter.adapt(parser.parse(str(file_path)), str(file_path))
+    ast_node = adapter.adapt(parser.parse(str(file_path)))
+    from src.ast.models import ASTTree
+    tree = ASTTree(root=ast_node, language="java", file_path=str(file_path))
 
     locationExtractor = LocatorExtractor()
     locations = locationExtractor.extract(tree)
