@@ -97,44 +97,87 @@ class JavaASTAdapter:
     # -------------------------------------------------
 
     def _extract_properties(self, parsed_node: Any) -> Dict[str, Any]:
+        """Extract scalar properties from parsed node"""
         props = {}
 
-        for attr in dir(parsed_node):
-            if attr.startswith("_"):
-                continue
+        # Check instance dictionary first
+        if hasattr(parsed_node, "__dict__"):
+            for attr, value in parsed_node.__dict__.items():
+                if attr.startswith("_"):
+                    continue
 
-            value = getattr(parsed_node, attr)
-
-            if isinstance(value, (str, int, float, bool)):
-                props[attr] = value
+                if isinstance(value, (str, int, float, bool)):
+                    props[attr] = value
 
         return props
 
     # -------------------------------------------------
-    # Child Extraction
+    # Child Extraction (Whitelist-based)
     # -------------------------------------------------
 
-    def _extract_children(self, parsed_node: Any) -> List[Any]:
-        children = []
+    # Whitelist of attributes that are actually structural children
+    # This prevents double-processing and duplication
+    CHILD_ATTRIBUTES = {
+        "body",           # Method/class/block body (contains methods, fields, etc.)
+        "parameters",     # Method parameters
+        "declarators",    # Variable declarators
+        "type",           # Type info (can be AST node)
+        "types",          # Class/interface types
+        "imports",        # Import statements
+        "package",        # Package declaration
+        "extends",        # Parent class
+        "implements",     # Interfaces
+        "arguments",      # Method arguments
+        "members",        # Class members
+        "methods",        # Methods in a class (may be duplicate of body in some parsers)
+        "throws",         # Exception types
+        "annotations",    # Annotations
+        "initializer",    # Field initializer
+        "expression",     # Expressions
+        "selectors",      # Method call selector chaining (.sendKeys().click() etc)
+        "statements",     # Block statements
+        "elements",       # Array elements
+    }
 
-        for attr in dir(parsed_node):
-            if attr.startswith("_"):
+    def _extract_children(self, parsed_node: Any) -> List[Any]:
+        """
+        Extract structural children using whitelist to avoid duplication.
+        Only includes attributes that are actually part of the AST hierarchy.
+        Deduplicates based on object identity to handle cases where both
+        'body' and 'methods' contain the same objects.
+        """
+        children = []
+        seen_ids = set()  # Track object identity to avoid duplicates
+
+        for attr in self.CHILD_ATTRIBUTES:
+            if not hasattr(parsed_node, attr):
                 continue
 
             value = getattr(parsed_node, attr)
 
+            if value is None:
+                continue
+
             if isinstance(value, list):
                 for item in value:
                     if self._is_ast_like(item):
-                        children.append(item)
+                        # Use object identity to deduplicate
+                        item_id = id(item)
+                        if item_id not in seen_ids:
+                            children.append(item)
+                            seen_ids.add(item_id)
 
             elif self._is_ast_like(value):
-                children.append(value)
+                item_id = id(value)
+                if item_id not in seen_ids:
+                    children.append(value)
+                    seen_ids.add(item_id)
 
         return children
 
     def _is_ast_like(self, obj: Any) -> bool:
-        return hasattr(obj, "__dict__")
+        """Check if object is an AST node (has __dict__)"""
+        return hasattr(obj, "__dict__") and not isinstance(obj, (str, int, float, bool))
 
     # -------------------------------------------------
     # Location Extraction

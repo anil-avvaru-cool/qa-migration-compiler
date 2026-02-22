@@ -17,31 +17,38 @@ class LocatorExtractor:
         logger.info("Locator extraction started")
 
         locators: List[Dict] = []
-        seen_selectors = {}  # Track first occurrence of each selector
+        seen_locators = set()  # Track unique locators by (strategy, value)
 
         for node in self._walk(ast_tree.root):
             qualifier = node.properties.get("qualifier")
             member = node.properties.get("member")
-            value = node.properties.get("value", "")
 
             if qualifier == "By" and member:
-                # Create key to track unique selectors
-                selector_key = (member, value)
+                # Get the selector value from children (arguments)
+                value = self._extract_selector_value(node)
                 
-                if selector_key not in seen_selectors:
-                    seen_selectors[selector_key] = 0
+                # Create unique key
+                locator_key = (member, value)
                 
-                # Only keep first occurrence of each unique selector
-                if seen_selectors[selector_key] == 0:
+                # Only keep first occurrence of each unique locator
+                if locator_key not in seen_locators:
+                    seen_locators.add(locator_key)
                     locators.append({
                         "id": node.id,
                         "strategy": member,
                         "file_path": ast_tree.file_path,
                     })
-                seen_selectors[selector_key] += 1
 
         logger.info("Locator extraction completed")
         return locators
+
+    def _extract_selector_value(self, node: ASTNode) -> str:
+        """Extract the selector value from method arguments (children)"""
+        for child in node.children:
+            value = child.properties.get("value", "")
+            if value:
+                return value
+        return ""
 
     def _walk(self, node: ASTNode):
         yield node
