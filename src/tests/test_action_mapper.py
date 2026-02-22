@@ -2,6 +2,7 @@ import logging
 from src.extraction.action_mapper import ActionMapper
 from src.parser.java.java_parser import JavaParser
 from src.parser.java.java_ast_adapter import JavaASTAdapter
+from src.analysis.symbol_table import SymbolTable
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +50,24 @@ def test_action_mapper_extraction(tmp_path):
     ast_node = adapter.adapt(compilation_unit)
     logger.debug(f"Adapted AST from action mapper test: {ast_node}")
 
-    actionMapper = ActionMapper()
+    from src.ast.models import ASTTree
+    ast_tree = ASTTree(root=ast_node, language="java", file_path=str(file_path))
+
+    # Build symbol table for robust target resolution
+    symbol_table = SymbolTable()
+    symbol_table.build_from_tree(ast_tree)
+
+    actionMapper = ActionMapper(symbol_table=symbol_table)
     actions = actionMapper.map(ast_node)
     logger.debug(f"Extracted actions: {actions}")
 
     assert len(actions) == 3
-    assert actions[0]["action"] == "sendKeys"
-    assert actions[1]["action"] == "sendKeys"
-    assert actions[2]["action"] == "click"
+    assert actions[0]["name"] == "sendKeys"
+    assert actions[1]["name"] == "sendKeys"
+    assert actions[2]["name"] == "click"
+
+    # Verify that target information is populated
+    for action in actions:
+        assert "type" in action
+        assert action["type"] == "action"
+        assert "target_name_id" in action or "target_node_id" in action

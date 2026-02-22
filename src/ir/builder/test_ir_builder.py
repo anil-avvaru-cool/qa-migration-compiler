@@ -14,7 +14,7 @@ class TestIRBuilder:
     Responsibility: pure transformation only.
     """
 
-    def build(self, extracted_test: Dict, suite_id: str | None = None) -> TestIR:
+    def build(self, extracted_test: Dict, suite_id: str | None = None, target_name_to_id: Dict[str, str] | None = None) -> TestIR:
         logger.info("Building TestIR for test: %s", extracted_test.get("name"))
 
         test_name = extracted_test["name"]
@@ -24,11 +24,19 @@ class TestIRBuilder:
         for index, step in enumerate(extracted_test.get("steps", [])):
             step_id = deterministic_hash(f"{test_id}::step::{index}::{step['name']}")
 
+            # Resolve target id using provided mapping if possible
+            target_name = step.get("target_name_id") or step.get("target")
+            target_id = None
+            if target_name and target_name_to_id:
+                target_id = target_name_to_id.get(target_name)
+
             step_ir = StepIR(
                 id=step_id,
                 type=step["type"],
                 name=step["name"],
-                target=step.get("target"),
+                targetId=target_id,
+                targetNameId=step.get("target_name_id"),
+                targetNodeId=step.get("target_node_id"),
                 parameters=step.get("parameters", {})
             )
             steps.append(step_ir)

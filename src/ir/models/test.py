@@ -6,7 +6,9 @@ class StepIR(BaseModel):
     id: str
     type: str  # action | assertion
     name: str
-    target: Optional[str] = None
+    targetId: Optional[str] = None
+    targetNameId: Optional[str] = None  # Variable/field name that holds the target
+    targetNodeId: Optional[str] = None  # AST node ID of the target locator
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(frozen=True)

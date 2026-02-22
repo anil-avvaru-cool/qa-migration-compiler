@@ -82,6 +82,18 @@ class JavaASTAdapter:
                 return "test"
             return "node"
 
+        # Field declarations → field
+        if node_class == "FieldDeclaration":
+            return "field"
+
+        # Variable declarators → variable
+        if node_class in ("VariableDeclarator", "LocalVariableDeclaration"):
+            return "variable"
+
+        # Formal parameters → parameter
+        if node_class == "FormalParameter":
+            return "parameter"
+
         return "node"
 
     def _is_test_method(self, parsed_node: Any) -> bool:

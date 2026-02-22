@@ -183,4 +183,7 @@ CANONICAL_NODE_TYPES = {
     "suite",
     "block",
     "statement",
+    "field",
+    "variable",
+    "parameter",
 }

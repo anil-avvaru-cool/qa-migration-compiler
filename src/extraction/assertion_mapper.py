@@ -23,7 +23,7 @@ class AssertionMapper:
             # Skip if we've already processed this exact node
             if node.id in seen_ids:
                 continue
-                
+
             member = node.properties.get("member")
 
             if member and member.startswith("assert"):
@@ -32,8 +32,10 @@ class AssertionMapper:
                     seen_ids.add(node.id)
                     seen_types.add(member)
                     assertions.append({
-                        "id": node.id,
-                        "assertion": member,
+                        "type": "assertion",
+                        "name": member,
+                        "target": None,
+                        "parameters": {},
                     })
 
         logger.info("Assertion mapping completed")

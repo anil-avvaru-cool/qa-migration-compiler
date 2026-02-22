@@ -139,39 +139,25 @@ class IRGenerationPipeline:
             suites_ir.append(suite_ir)
             suite_name_to_id[extracted_suite.get("name")] = suite_ir.id
 
-        # Build tests, linking to suite ids when possible
-        tests_ir: List[TestIR] = []
-        for extracted_test in all_tests:
-            # determine suite id by searching suites that list this test
-            suite_id = None
-            for s in all_suites:
-                if extracted_test.get("name") in s.get("tests", []):
-                    suite_id = suite_name_to_id.get(s.get("name"))
-                    break
-
-            test_ir = test_builder.build(extracted_test, suite_id=suite_id)
-            tests_ir.append(test_ir)
-
         # Build targets (normalize extracted target dicts first)
         normalized_targets = []
         for t in all_targets:
+            # Locator entries from LocatorExtractor (strategy present)
+            if "strategy" in t:
+                normalized_targets.append({
+                    "type": "locator",
+                    # Prefer a human name if locator was assigned to a variable
+                    "name": t.get("name") or t.get("id"),
+                    "locator": t.get("locator") or t.get("strategy"),
+                    "metadata": {"file_path": t.get("file_path"), "id": t.get("id")},
+                })
             # Page objects: have 'name' and 'file_path'
-            if "name" in t and ("strategy" not in t and "type" not in t):
+            elif "name" in t and ("strategy" not in t and "type" not in t):
                 normalized_targets.append({
                     "type": "page",
                     "name": t.get("name"),
                     "locator": None,
                     "metadata": {"file_path": t.get("file_path"), "id": t.get("id")},
-                })
-            # locator entries from LocatorExtractor
-            elif "strategy" in t:
-                # LocatorExtractor provides a strategy (e.g. cssSelector/xpath/id)
-                # TargetIR.locator expects a string; use the strategy name as a best-effort locator
-                normalized_targets.append({
-                    "type": "locator",
-                    "name": t.get("id"),
-                    "locator": t.get("strategy"),
-                    "metadata": {"file_path": t.get("file_path")},
                 })
             else:
                 # fallback generic mapping
@@ -183,6 +169,25 @@ class IRGenerationPipeline:
                 })
 
         targets_ir: List[TargetIR] = targets_builder.build(normalized_targets)
+
+        # Build a mapping from normalized target name -> deterministic target id
+        target_name_to_id = {}
+        for i, t_ir in enumerate(targets_ir):
+            src_name = normalized_targets[i]["name"]
+            target_name_to_id[src_name] = t_ir.id
+
+        # Build tests, linking to suite ids when possible (tests need target mapping)
+        tests_ir: List[TestIR] = []
+        for extracted_test in all_tests:
+            # determine suite id by searching suites that list this test
+            suite_id = None
+            for s in all_suites:
+                if extracted_test.get("name") in s.get("tests", []):
+                    suite_id = suite_name_to_id.get(s.get("name"))
+                    break
+
+            test_ir = test_builder.build(extracted_test, suite_id=suite_id, target_name_to_id=target_name_to_id)
+            tests_ir.append(test_ir)
 
         # Build environments
         environments_ir: List[EnvironmentIR] = []
