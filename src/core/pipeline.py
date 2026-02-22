@@ -60,10 +60,19 @@ class IRGenerationPipeline:
         source_language: str,
         source_files: List[str],
         output_path: str,
+        target_framework: str = "Cypress-TS",
         compiler_version: str = "0.1.0",
     ):
         """
         Execute full IR generation pipeline.
+        
+        Args:
+            project_name: Name of the project
+            source_language: Source test framework (e.g., 'Selenium-Java-TestNG')
+            source_files: List of source files to process
+            output_path: Output directory for IR files
+            target_framework: Target test framework (default: 'Cypress-TS')
+            compiler_version: Compiler version
         """
 
         logger.info("IR pipeline started")
@@ -119,11 +128,11 @@ class IRGenerationPipeline:
         # 4️⃣ Build Project IR
         project_ir = self.ir_builder.build(
             project_name=project_name,
-            source_language=source_language,
-            tests=test_names,
-            suites=suite_names,
-            environments=environment_names,
-            compiler_version=compiler_version,
+            source_framework=source_language,
+            target_framework=target_framework,
+            architecture_pattern="POM",
+            supports_parallel=True,
+            ir_version="2.0.0",
         )
 
         # 5️⃣ Build detailed IR models (tests, suites, targets, environments, data)
@@ -137,14 +146,15 @@ class IRGenerationPipeline:
         for extracted_suite in all_suites:
             suite_ir = suite_builder.build(extracted_suite)
             suites_ir.append(suite_ir)
-            suite_name_to_id[extracted_suite.get("name")] = suite_ir.id
+            suite_name_to_id[extracted_suite.get("name")] = suite_ir.suiteId
 
         # Build targets (normalize extracted target dicts first)
         normalized_targets = []
-        for t in all_targets:
+        for idx, t in enumerate(all_targets):
             # Locator entries from LocatorExtractor (strategy present)
             if "strategy" in t:
                 normalized_targets.append({
+                    "targetId": t.get("name") or f"target_{idx}",
                     "type": "locator",
                     # Prefer a human name if locator was assigned to a variable
                     "name": t.get("name") or t.get("id"),
@@ -154,6 +164,7 @@ class IRGenerationPipeline:
             # Page objects: have 'name' and 'file_path'
             elif "name" in t and ("strategy" not in t and "type" not in t):
                 normalized_targets.append({
+                    "targetId": t.get("name") or f"target_{idx}",
                     "type": "page",
                     "name": t.get("name"),
                     "locator": None,
@@ -162,6 +173,7 @@ class IRGenerationPipeline:
             else:
                 # fallback generic mapping
                 normalized_targets.append({
+                    "targetId": t.get("name") or t.get("id") or f"target_{idx}",
                     "type": t.get("type", "unknown"),
                     "name": t.get("name") or t.get("id"),
                     "locator": t.get("locator"),
@@ -174,7 +186,7 @@ class IRGenerationPipeline:
         target_name_to_id = {}
         for i, t_ir in enumerate(targets_ir):
             src_name = normalized_targets[i]["name"]
-            target_name_to_id[src_name] = t_ir.id
+            target_name_to_id[src_name] = t_ir.targetId
 
         # Build tests, linking to suite ids when possible (tests need target mapping)
         tests_ir: List[TestIR] = []
@@ -186,7 +198,13 @@ class IRGenerationPipeline:
                     suite_id = suite_name_to_id.get(s.get("name"))
                     break
 
-            test_ir = test_builder.build(extracted_test, suite_id=suite_id, target_name_to_id=target_name_to_id)
+            test_ir = test_builder.build(
+                test_id=extracted_test.get("name"),
+                steps=extracted_test.get("steps", []),
+                suite_id=suite_id,
+                tags=extracted_test.get("tags", []),
+                target_name_to_id=target_name_to_id,
+            )
             tests_ir.append(test_ir)
 
         # Build environments

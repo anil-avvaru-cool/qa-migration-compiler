@@ -1,9 +1,8 @@
 import logging
 from datetime import datetime
-from typing import Dict, List
+from typing import Optional
 
-from src.ir.models.project import ProjectIR, ProjectMetadata
-from src.utils.hashing import deterministic_hash
+from src.ir.models.project import ProjectIR
 
 
 logger = logging.getLogger(__name__)
@@ -11,41 +10,45 @@ logger = logging.getLogger(__name__)
 
 class ProjectIRBuilder:
     """
-    Builds ProjectIR as top-level IR container.
+    Builds ProjectIR as top-level IR container with enhanced schema.
     """
 
     def build(
         self,
         project_name: str,
-        source_language: str,
-        tests: List[str],
-        suites: List[str],
-        environments: List[str],
-        compiler_version: str = "0.1.0",
+        source_framework: str,
+        target_framework: str,
+        architecture_pattern: str = "POM",
+        supports_parallel: bool = True,
+        ir_version: str = "2.0.0",
+        created_on: Optional[str] = None,
     ) -> ProjectIR:
-
+        """
+        Build ProjectIR with enhanced schema.
+        
+        Args:
+            project_name: Project name
+            source_framework: Source framework (e.g., Selenium-Java-TestNG)
+            target_framework: Target framework (e.g., Playwright-TS)
+            architecture_pattern: Architecture pattern (default: POM)
+            supports_parallel: Whether parallel execution is supported
+            ir_version: IR schema version
+            created_on: Creation date (YYYY-MM-DD format, defaults to today)
+        """
         logger.info("Building ProjectIR for project: %s", project_name)
 
-        project_id = deterministic_hash(f"project::{project_name}")
-        
-        # Using an f-string
-        formatted_f_string = f"{datetime.now():%Y-%m-%d %H:%M:%S}"
-
-        metadata = ProjectMetadata(
-            name=project_name,
-            version="1.0.0",
-            generated_at=formatted_f_string,
-            source_language=source_language,
-            compiler_version=compiler_version,
-        )
+        if created_on is None:
+            created_on = datetime.now().strftime("%Y-%m-%d")
 
         project_ir = ProjectIR(
-            id=project_id,
-            metadata=metadata,
-            environments=environments,
-            suites=suites,
-            tests=tests,
+            irVersion=ir_version,
+            projectName=project_name,
+            sourceFramework=source_framework,
+            targetFramework=target_framework,
+            architecturePattern=architecture_pattern,
+            supportsParallel=supports_parallel,
+            createdOn=created_on,
         )
 
-        logger.info("Finished building ProjectIR: %s", project_id)
+        logger.info("Finished building ProjectIR: %s", project_name)
         return project_ir

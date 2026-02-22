@@ -3,19 +3,14 @@ from typing import List, Optional
 from datetime import datetime
 
 
-class ProjectMetadata(BaseModel):
-    name: str
-    version: str = "1.0.0"
-    generated_at: str
-    source_language: str
-    compiler_version: str
-
-
 class ProjectIR(BaseModel):
-    id: str = Field(..., description="Deterministic project ID")
-    metadata: ProjectMetadata
-    environments: List[str] = Field(default_factory=list)
-    suites: List[str] = Field(default_factory=list)
-    tests: List[str] = Field(default_factory=list)
+    """Enhanced Project IR model matching target schema."""
+    irVersion: str = Field(default="2.0.0", description="IR schema version")
+    projectName: str = Field(..., description="Project name")
+    sourceFramework: str = Field(..., description="Source framework (e.g., Selenium-Java-TestNG)")
+    targetFramework: str = Field(..., description="Target framework (e.g., Playwright-TS)")
+    architecturePattern: str = Field(default="POM", description="Architecture pattern (e.g., POM, POJO)")
+    supportsParallel: bool = Field(default=False, description="Whether parallel execution is supported")
+    createdOn: str = Field(..., description="Creation date in YYYY-MM-DD format")
 
     model_config = ConfigDict(frozen=True)

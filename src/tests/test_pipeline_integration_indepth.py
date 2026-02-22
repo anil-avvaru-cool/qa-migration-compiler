@@ -545,8 +545,8 @@ public class CheckoutTest {
 
             # Basic assertions
             self.assertIsNotNone(project_ir)
-            self.assertEqual(project_ir.metadata.name, "ecommerce-qa")
-            self.assertEqual(project_ir.metadata.source_language, "java")
+            self.assertEqual(project_ir.projectName, "ecommerce-qa")
+            self.assertEqual(project_ir.sourceFramework, "java")
 
             # Store for subsequent tests
             self.project_ir = project_ir
