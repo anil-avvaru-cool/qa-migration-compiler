@@ -18,7 +18,7 @@ Non-Goals:
 from __future__ import annotations
 
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # AST Location
 # ---------------------------------------------------------
 
-class ASTLocation(BaseModel):
+class ASTLocation(BaseModel, frozen=True):
     """
     Represents source code position.
     """
@@ -39,8 +39,6 @@ class ASTLocation(BaseModel):
     end_line: Optional[int] = None
     end_column: Optional[int] = None
 
-    class Config:
-        frozen = True
 
 
 # ---------------------------------------------------------
@@ -66,9 +64,7 @@ class ASTNode(BaseModel):
     location: Optional[ASTLocation] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        arbitrary_types_allowed = False
-        validate_assignment = True
+    model_config = ConfigDict(arbitrary_types_allowed=False, validate_assignment=True)
 
     # -------------------------
     # Structural Safeguards
@@ -150,8 +146,7 @@ class ASTTree(BaseModel):
     language: str
     file_path: str
 
-    class Config:
-        validate_assignment = True
+    model_config = ConfigDict(validate_assignment=True)
 
     @model_validator(mode="after")
     def validate_root(self):
@@ -178,3 +173,14 @@ class ASTTree(BaseModel):
 
     def node_count(self) -> int:
         return len(self.walk())
+
+
+CANONICAL_NODE_TYPES = {
+    "module",
+    "class",
+    "method",
+    "test",
+    "suite",
+    "block",
+    "statement",
+}

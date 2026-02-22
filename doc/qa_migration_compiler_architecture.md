@@ -3197,13 +3197,8 @@ If you want v1 MVP:
 Keep only:
 
 ```
-parser/
-ast/
-analysis/call_graph/
-analysis/dependency/
-extraction/
-ir/
-incremental/
+Parser → AST → Extraction → IR Builder → Schema Validation → Writer
+
 ```
 
 Add rest later.

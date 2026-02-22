@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
@@ -6,7 +6,7 @@ from datetime import datetime
 class ProjectMetadata(BaseModel):
     name: str
     version: str = "1.0.0"
-    generated_at: datetime
+    generated_at: str
     source_language: str
     compiler_version: str
 
@@ -18,5 +18,4 @@ class ProjectIR(BaseModel):
     suites: List[str] = Field(default_factory=list)
     tests: List[str] = Field(default_factory=list)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
