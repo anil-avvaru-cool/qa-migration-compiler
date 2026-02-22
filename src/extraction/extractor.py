@@ -42,11 +42,18 @@ class IRExtractor:
 
         extracted_tests: List[Dict] = []
         extracted_suites: List[Dict] = []
+        extracted_pages: List[Dict] = []
+
+        page_extractor = self.page_extractor.extract(ast_tree)
+        logger.debug(f"Extracted page objects: {page_extractor}")
+        extracted_pages.extend(page_extractor)
 
         # --- Extract targets via dedicated extractors ---
         extracted_targets = []
-        extracted_targets.extend(self.page_extractor.extract(ast_tree))
-        extracted_targets.extend(self.locator_extractor.extract(ast_tree))
+        
+        locator_extractor = self.locator_extractor.extract(ast_tree)
+        logger.debug(f"Extracted locators: {locator_extractor}")
+        extracted_targets.extend(locator_extractor)
 
         # --- Traverse AST generically ---
         for node in self._traverse(ast_tree.root):
