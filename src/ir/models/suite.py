@@ -1,12 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 
 
 class SuiteIR(BaseModel):
-    id: str = Field(..., description="Deterministic suite ID")
-    name: str
-    parent_id: Optional[str] = None
-    tests: List[str] = Field(default_factory=list)
+    """Enhanced Suite IR model."""
+    suiteId: str = Field(..., description="Unique suite identifier")
+    description: Optional[str] = Field(None, description="Suite description")
+    tests: List[str] = Field(default_factory=list, description="List of test IDs in this suite")
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)

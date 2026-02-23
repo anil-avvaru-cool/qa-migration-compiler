@@ -6,6 +6,7 @@ from src.extraction.page_object_extractor import PageObjectExtractor
 from src.extraction.locator_extractor import LocatorExtractor
 from src.extraction.assertion_mapper import AssertionMapper
 from src.extraction.action_mapper import ActionMapper
+from src.analysis.symbol_table import SymbolTable
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,8 @@ class IRExtractor:
         self.page_extractor = PageObjectExtractor()
         self.locator_extractor = LocatorExtractor()
         self.assertion_mapper = AssertionMapper()
-        self.action_mapper = ActionMapper()
+        self.action_mapper = ActionMapper()  # Default with no symbol table
+        self.symbol_table = SymbolTable()  # Will be built per AST tree
 
     def extract(
         self,
@@ -40,13 +42,24 @@ class IRExtractor:
 
         logger.info("Starting extraction for project: %s", project_name)
 
+        # Build symbol table first for this AST tree
+        self.symbol_table.build_from_tree(ast_tree)
+        self.action_mapper = ActionMapper(symbol_table=self.symbol_table)
+
         extracted_tests: List[Dict] = []
         extracted_suites: List[Dict] = []
+        extracted_pages: List[Dict] = []
+
+        page_extractor = self.page_extractor.extract(ast_tree)
+        logger.debug(f"Extracted page objects: {page_extractor}")
+        extracted_pages.extend(page_extractor)
 
         # --- Extract targets via dedicated extractors ---
         extracted_targets = []
-        extracted_targets.extend(self.page_extractor.extract(ast_tree))
-        extracted_targets.extend(self.locator_extractor.extract(ast_tree))
+        
+        locator_extractor = self.locator_extractor.extract(ast_tree)
+        logger.debug(f"Extracted locators: {locator_extractor}")
+        extracted_targets.extend(locator_extractor)
 
         # --- Traverse AST generically ---
         for node in self._traverse(ast_tree.root):
@@ -85,14 +98,15 @@ class IRExtractor:
         steps: List[Dict] = []
 
         for statement in getattr(node, "children", []):
-            action = self.action_mapper.map(statement)
-            if action:
-                steps.append(action)
+            actions = self.action_mapper.map(statement)
+            if actions:
+                # action mapper returns a list of step dicts
+                steps.extend(actions)
                 continue
 
-            assertion = self.assertion_mapper.map(statement)
-            if assertion:
-                steps.append(assertion)
+            assertions = self.assertion_mapper.map(statement)
+            if assertions:
+                steps.extend(assertions)
 
         return {
             "name": node.name,

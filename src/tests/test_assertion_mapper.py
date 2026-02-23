@@ -42,12 +42,19 @@ def test_assertion_mapper_extracts_assert_methods(tmp_path):
     # Validate count
     assert len(assertions) == 3
 
-    # Validate assertion names
-    assertion_names = {a["assertion"] for a in assertions}
+    # Validate assertion names (new format: type/name/target/parameters)
+    assertion_names = {a["name"] for a in assertions}
 
     assert "assertTrue" in assertion_names
     assert "assertEquals" in assertion_names
     assert "assertFalse" in assertion_names
+
+    # Verify structure
+    for assertion in assertions:
+        assert assertion["type"] == "assertion"
+        assert "name" in assertion
+        assert "target" in assertion
+        assert "parameters" in assertion
 
 
 def test_assertion_mapper_is_deterministic(tmp_path):

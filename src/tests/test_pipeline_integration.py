@@ -71,12 +71,15 @@ class TestEndToEndPipeline(unittest.TestCase):
             # ----------------------------------------
             # 3️⃣ Run pipeline
             # ----------------------------------------
-            project_ir = pipeline.run(
+            result = pipeline.run(
                 project_name="demo-project",
                 source_language="java",
                 source_files=[source_path],
                 output_path=output_path,
             )
+
+            # pipeline now returns a dict with keys: project, tests, suites, targets, data, environments
+            project_ir = result.get("project")
 
             logger.debug(f"Generated ProjectIR model: {project_ir}")
 
@@ -96,13 +99,13 @@ class TestEndToEndPipeline(unittest.TestCase):
             # ----------------------------------------
             logger.debug("IR JSON content: %s", ir_json)
 
-            # Project metadata
-            metadata = ir_json["metadata"]
+            # Project metadata is nested under 'project'
+            metadata = ir_json.get("project", {}).get("metadata", {})
 
-            self.assertEqual(metadata["name"], "demo-project")
-            self.assertEqual(metadata["source_language"], "java")
+            self.assertEqual(metadata.get("name"), "demo-project")
+            self.assertEqual(metadata.get("source_language"), "java")
 
-            # # Tests extracted
+            # Tests extracted (top-level 'tests' contains list of test IR objects)
             self.assertIn("tests", ir_json)
             self.assertEqual(len(ir_json["tests"]), 2)
 
