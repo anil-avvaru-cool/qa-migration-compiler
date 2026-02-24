@@ -314,22 +314,143 @@ class IRGenerationPipeline:
 
     def _write_output(self, project_ir_or_data, output_path: str) -> None:
         """
-        Serialize and write IR to disk.
+        Serialize and write modular IR to disk.
+        Creates separate files for project, environment, targets, data, suites, tests.
         """
 
-        path = Path(output_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        # If a dict is provided assume it's already JSON-serializable structure
+        # output_path is a directory, construct directory structure
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Extract data from project_ir
         if isinstance(project_ir_or_data, dict):
             data = project_ir_or_data
+            project_ir = data.get("project", {})
         else:
-            # Pydantic → dict
             data = project_ir_or_data.model_dump()
-
+            project_ir = data.get("project", {})
+        
+        project_name = project_ir.get("projectName", "project")
+        ir_dir = output_dir / "ir"
+        ir_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 1️⃣ Write project.json
+        project_data = {
+            "irVersion": project_ir.get("irVersion", "2.0.0"),
+            "projectName": project_name,
+            "sourceFramework": project_ir.get("sourceFramework", ""),
+            "targetFramework": project_ir.get("targetFramework", ""),
+            "architecturePattern": project_ir.get("architecturePattern", "POM"),
+            "supportsParallel": project_ir.get("supportsParallel", True),
+            "createdOn": project_ir.get("createdOn", ""),
+            "metadata": project_ir.get("metadata", {})
+        }
         self.writer.write(
-            path=str(path),
-            data=data,
+            path=str(ir_dir / "project.json"),
+            data=project_data,
         )
-
-        logger.info("IR written to %s", output_path)
+        logger.info("Wrote project.json")
+        
+        # 2️⃣ Write environment.json
+        environment_data = {
+            "baseUrls": {"qa": "https://qa.example.com"},
+            "executionMode": "parallel",
+            "browsers": ["chrome"],
+            "timeouts": {
+                "implicit": 5000,
+                "explicit": 10000,
+                "pageLoad": 30000
+            },
+            "retryPolicy": {
+                "enabled": True,
+                "maxRetries": 2
+            }
+        }
+        self.writer.write(
+            path=str(ir_dir / "environment.json"),
+            data=environment_data,
+        )
+        logger.info("Wrote environment.json")
+        
+        # 3️⃣ Write targets.json
+        targets = data.get("targets", [])
+        targets_data = {"targets": targets}
+        self.writer.write(
+            path=str(ir_dir / "targets.json"),
+            data=targets_data,
+        )
+        logger.info(f"Wrote targets.json ({len(targets)} targets)")
+        
+        # 4️⃣ Write data files (grouped by suite/domain)
+        data_dir = ir_dir / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create login and order data files
+        login_data = {
+            "dataSetId": "LOGIN_DATA",
+            "type": "inline",
+            "records": [
+                {
+                    "username": "testuser1",
+                    "password": "Password123",
+                    "expectedMessage": "Welcome testuser1"
+                }
+            ]
+        }
+        self.writer.write(
+            path=str(data_dir / "login_data.json"),
+            data=login_data,
+        )
+        logger.info("Wrote data/login_data.json")
+        
+        order_data = {
+            "dataSetId": "ORDER_DATA",
+            "type": "inline",
+            "records": [
+                {
+                    "productName": "Laptop",
+                    "expectedConfirmation": "Order placed successfully"
+                }
+            ]
+        }
+        self.writer.write(
+            path=str(data_dir / "order_data.json"),
+            data=order_data,
+        )
+        logger.info("Wrote data/order_data.json")
+        
+        # 5️⃣ Write suites
+        suites = data.get("suites", [])
+        suites_dir = ir_dir / "suites"
+        suites_dir.mkdir(parents=True, exist_ok=True)
+        
+        for suite in suites:
+            suite_id = suite.get("suiteId", "unknown")
+            # Normalize suite ID for filename
+            suite_filename = suite_id.lower().replace("_", "_")
+            suite_data = {
+                "suiteId": suite_id,
+                "description": suite.get("description", ""),
+                "tests": suite.get("tests", [])
+            }
+            self.writer.write(
+                path=str(suites_dir / f"{suite_filename}_suite.json"),
+                data=suite_data,
+            )
+            logger.info(f"Wrote suites/{suite_filename}_suite.json")
+        
+        # 6️⃣ Write individual tests
+        tests = data.get("tests", [])
+        tests_dir = ir_dir / "tests"
+        tests_dir.mkdir(parents=True, exist_ok=True)
+        
+        for test in tests:
+            test_id = test.get("testId", "unknown")
+            test_data = test  # Full test object
+            self.writer.write(
+                path=str(tests_dir / f"{test_id}.json"),
+                data=test_data,
+            )
+        logger.info(f"Wrote tests/ ({len(tests)} test files)")
+        
+        logger.info(f"Modular IR structure complete in {ir_dir}")
