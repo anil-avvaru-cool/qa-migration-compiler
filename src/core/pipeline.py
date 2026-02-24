@@ -61,7 +61,7 @@ class IRGenerationPipeline:
         source_language: str,
         source_files: List[str],
         output_path: str,
-        target_framework: str = "Cypress-TS",
+        target_framework: str = "UIPath",
         compiler_version: str = "0.1.0",
     ):
         """
