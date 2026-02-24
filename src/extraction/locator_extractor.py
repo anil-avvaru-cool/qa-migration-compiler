@@ -53,6 +53,7 @@ class LocatorExtractor:
         # Extract page class name from file path or class declaration
         page_class = self._extract_page_class(ast_tree, node_map)
 
+        # PHASE 1: Extract direct By.* selectors (existing logic)
         for node in node_map.values():
             qualifier = node.properties.get("qualifier")
             member = node.properties.get("member")
@@ -105,7 +106,18 @@ class LocatorExtractor:
                         "file_path": ast_tree.file_path,
                     })
 
-        logger.info("Enhanced locator extraction completed: %d locators found", len(locators))
+        # PHASE 2: NEW - Extract navigation URLs (driver.get calls)
+        navigation_locators = self._extract_navigation_urls(ast_tree, page_class, node_map, seen_locators)
+        locators.extend(navigation_locators)
+        
+        # PHASE 3: NEW - Extract wait conditions as implicit targets
+        wait_locators = self._extract_wait_conditions(ast_tree, page_class, node_map, seen_locators)
+        locators.extend(wait_locators)
+
+        logger.info("Enhanced locator extraction completed: %d locators found "
+                   "(%d direct, %d navigation, %d wait conditions)",
+                   len(locators), len(locators) - len(navigation_locators) - len(wait_locators),
+                   len(navigation_locators), len(wait_locators))
         return locators
 
     def _extract_page_class(self, ast_tree: ASTTree, node_map: Dict) -> Optional[str]:
@@ -281,3 +293,225 @@ class LocatorExtractor:
         yield node
         for child in node.children:
             yield from self._walk(child)
+    # NEW METHODS FOR WEEK 2: Navigation URLs and Wait Conditions
+    
+    def _extract_navigation_urls(
+        self,
+        ast_tree: ASTTree,
+        page_class: Optional[str],
+        node_map: Dict,
+        seen_locators: set
+    ) -> List[Dict]:
+        """
+        Extract navigation URLs from driver.get() calls.
+        
+        Finds all driver.get("https://...") calls and creates implicit navigation targets.
+        """
+        navigation_locators = []
+        
+        for node in node_map.values():
+            member = node.properties.get("member")
+            qualifier = node.properties.get("qualifier")
+            
+            # Look for driver.get() calls
+            if self._is_driver_get_call(node):
+                url = self._extract_url_from_get(node)
+                if url:
+                    # Generate unique key for this URL
+                    locator_key = ("navigation", url, page_class)
+                    
+                    if locator_key not in seen_locators:
+                        seen_locators.add(locator_key)
+                        
+                        # Generate targetId from URL
+                        target_id = self._generate_id_from_url(url)
+                        
+                        # Extract method context (which method contains this get call)
+                        method_context = self._find_enclosing_method(node, node_map)
+                        
+                        navigation_target = {
+                            "id": node.id,
+                            "strategy": "navigation",
+                            "targetId": target_id,
+                            "name": target_id,
+                            "type": "navigation",
+                            "context": {
+                                "page": page_class,
+                                "method": method_context,
+                            },
+                            "semantic": {
+                                "role": "navigation",
+                                "businessName": f"Navigate to {url}",
+                            },
+                            "target": {
+                                "type": "url",
+                                "value": url,
+                            },
+                            "selectorStrategies": [
+                                {
+                                    "strategy": "url",
+                                    "value": url,
+                                    "stabilityScore": 0.95,  # URLs very stable
+                                }
+                            ],
+                            "preferredStrategy": "url",
+                            "file_path": ast_tree.file_path,
+                        }
+                        
+                        navigation_locators.append(navigation_target)
+                        logger.debug("[LocatorExtractor] Found navigation URL: %s -> %s", url, target_id)
+        
+        return navigation_locators
+
+    def _extract_wait_conditions(
+        self,
+        ast_tree: ASTTree,
+        page_class: Optional[str],
+        node_map: Dict,
+        seen_locators: set
+    ) -> List[Dict]:
+        """
+        Extract wait conditions (WebDriverWait, ExpectedConditions) as implicit targets.
+        
+        Finds WebDriverWait patterns and creates targets for elements being waited for.
+        """
+        wait_locators = []
+        
+        for node in node_map.values():
+            member = node.properties.get("member")
+            qualifier = node.properties.get("qualifier")
+            
+            # Look for wait condition calls (simplified pattern)
+            if self._is_wait_condition_call(member, qualifier):
+                # Try to extract the locator being waited for
+                waited_locator = self._extract_locator_from_wait(node, node_map)
+                
+                if waited_locator and waited_locator.get("targetId"):
+                    locator_key = (waited_locator["strategy"], 
+                                   waited_locator.get("value", "unknown"),
+                                   page_class)
+                    
+                    if locator_key not in seen_locators:
+                        seen_locators.add(locator_key)
+                        
+                        # Mark as derived from wait condition
+                        waited_locator["derivedFrom"] = "wait_condition"
+                        wait_locators.append(waited_locator)
+                        
+                        logger.debug("[LocatorExtractor] Found wait condition target: %s",
+                                    waited_locator.get("targetId"))
+        
+        return wait_locators
+
+    def _is_driver_get_call(self, node: ASTNode) -> bool:
+        """Check if node represents a driver.get() call."""
+        member = node.properties.get("member")
+        qualifier = node.properties.get("qualifier")
+        
+        return member == "get" and qualifier in ("driver", "WebDriver", "webDriver")
+
+    def _extract_url_from_get(self, node: ASTNode) -> Optional[str]:
+        """Extract URL string from driver.get(url) call."""
+        for child in node.children:
+            value = child.properties.get("value")
+            if value and isinstance(value, str):
+                # Remove quotes if present
+                if (value.startswith('"') and value.endswith('"')) or \
+                   (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                
+                # Basic URL validation
+                if value.startswith("http://") or value.startswith("https://"):
+                    return value
+        
+        return None
+
+    def _generate_id_from_url(self, url: str) -> str:
+        """
+        Generate targetId from URL.
+        
+        Example: "https://ecommerce-app.localhost/products" -> "PRODUCTS_PAGE"
+        """
+        try:
+            # Extract path component
+            if "://" in url:
+                path_part = url.split("://", 1)[1]  # Remove protocol
+                path_part = path_part.split("?", 1)[0]  # Remove query params
+                path_part = path_part.split("#", 1)[0]  # Remove fragments
+                path_part = path_part.split("/")[-1]  # Get last path segment
+            else:
+                path_part = url.split("/")[-1]
+            
+            # Clean up and generate ID
+            if path_part:
+                target_id = path_part.replace("-", "_").upper()
+                target_id = target_id + "_PAGE" if target_id and not target_id.endswith("PAGE") else target_id
+                return target_id or "NAVIGATION_PAGE"
+            
+            return "NAVIGATION_PAGE"
+        except Exception as e:
+            logger.warning("[LocatorExtractor] Failed to generate ID from URL %s: %s", url, e)
+            return "NAVIGATION_PAGE"
+
+    def _is_wait_condition_call(self, member: Optional[str], qualifier: Optional[str]) -> bool:
+        """Check if node represents a wait condition call."""
+        wait_patterns = {
+            "until", "wait", "visibilityOfElementLocated", "presenceOfElementLocated",
+            "elementToBeClickable", "invisibilityOfElementLocated", "stalenessOf"
+        }
+        
+        return member in wait_patterns or \
+               qualifier in ("WebDriverWait", "ExpectedConditions", "wait") or \
+               (member and member.startswith("wait"))
+
+    def _extract_locator_from_wait(self, node: ASTNode, node_map: Dict) -> Optional[Dict]:
+        """Extract the locator being waited for from a wait condition call."""
+        # Try to find By.* selector reference in wait call children
+        for child in node.children:
+            qualifier = child.properties.get("qualifier")
+            member = child.properties.get("member")
+            
+            if qualifier == "By" and member:
+                # Found By.* selector, extract value
+                value = self._extract_selector_value(child)
+                normalized_value = self._normalize_selector_value(value)
+                
+                strategy = self._map_strategy(member)
+                target_id = f"WAIT_{self._generate_target_id(None, None)}"
+                
+                return {
+                    "id": child.id,
+                    "strategy": member,
+                    "targetId": target_id,
+                    "type": "ui-element",
+                    "semantic": {
+                        "role": "wait_target",
+                        "businessName": f"Wait for element {normalized_value}",
+                    },
+                    "selectorStrategies": [{
+                        "strategy": strategy,
+                        "value": normalized_value,
+                        "stabilityScore": 0.85,
+                    }],
+                }
+        
+        return None
+
+    def _find_enclosing_method(self, node: ASTNode, node_map: Dict) -> Optional[str]:
+        """Find the method name that encloses a given node."""
+        parent_id = node.parent_id
+        depth = 0
+        max_depth = 10
+        
+        while parent_id and depth < max_depth:
+            parent = node_map.get(parent_id)
+            if not parent:
+                break
+            
+            if parent.type in ("method", "node", "test"):
+                return parent.properties.get("name")
+            
+            parent_id = parent.parent_id
+            depth += 1
+        
+        return None

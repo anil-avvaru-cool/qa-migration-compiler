@@ -281,7 +281,32 @@ class IRGenerationPipeline:
         #     self.validator.validate(project_ir)
         #     logger.info("Schema validation passed")
 
-        # 6️⃣ Write Output — write a composite structure with all IR pieces
+        # 6️⃣ NEW - Validate IR Completeness
+        from src.ir.validator.completeness_validator import CompletenessValidator
+        
+        logger.info("IR completeness validation started")
+        completeness_validator = CompletenessValidator()
+        validation_report = completeness_validator.validate(project_ir)
+        
+        logger.info("IR Validation Summary: %s", validation_report.summary())
+        for error in validation_report.errors:
+            logger.error("  [ERROR] %s", error)
+        for warning in validation_report.warnings:
+            logger.warning("  [WARNING] %s", warning)
+        for info in validation_report.info:
+            logger.info("  [INFO] %s", info)
+        
+        if not validation_report.is_complete():
+            logger.warning("IR has missing data - see validation_report.json for details")
+        
+        # Write validation report
+        validation_report_path = Path(output_path) / "validation_report.json"
+        import json
+        with open(validation_report_path, "w") as f:
+            json.dump(validation_report.to_dict(), f, indent=2)
+        logger.info("Validation report written to: %s", validation_report_path)
+
+        # 7️⃣ Write Output — write a composite structure with all IR pieces
         output_data = {
             "project": project_ir.model_dump(),
             "tests": [t.model_dump() for t in tests_ir],

@@ -18,6 +18,12 @@ class StepEnricher:
     - Create StepTarget objects for navigation
     - Infer data sources from method parameters
     - Normalize step structure for IR builder
+    
+    Resolution Strategies (in order):
+    1. Already has explicit targetId
+    2. Fuzzy match target_name_id in targets
+    3. NEW: CallGraph resolution for navigation methods
+    4. Mark as unresolved
     """
 
     def __init__(self, extracted_targets: List[Dict]):
@@ -41,6 +47,10 @@ class StepEnricher:
                 self.targets_by_name[name] = target
 
         logger.info("StepEnricher initialized with %d targets", len(extracted_targets))
+        
+        # NEW: Injected by pipeline
+        self.call_graph = None
+        self.extracted_targets = extracted_targets
 
     def enrich(self, extracted_steps: List[Dict], test_data: Optional[Dict] = None) -> List[Dict]:
         """
@@ -94,26 +104,96 @@ class StepEnricher:
         return enriched
 
     def _resolve_target_id(self, step: Dict) -> Optional[str]:
-        """Resolve target ID from various step properties."""
-
-        # Check if already has targetId
+        """
+        Resolve target ID with multi-level fallback strategies.
+        
+        Strategy 1: Already has explicit targetId
+        Strategy 2: Fuzzy match target_name_id
+        Strategy 3: NEW - CallGraph for navigation methods
+        Strategy 4: Return None (unresolved)
+        """
+        
+        # Strategy 1: Already has explicit targetId
         if step.get("targetId"):
+            logger.debug("[StepEnricher] Strategy 1: Using explicit targetId: %s", step["targetId"])
             return step["targetId"]
 
-        # Check if targetId can be resolved from name
+        # Strategy 2: Fuzzy match target_name_id in targets
         target_ref = step.get("target_name_id") or step.get("targetId")
         if target_ref:
             # Try to find in maps
             if target_ref in self.targets_by_id:
+                logger.debug("[StepEnricher] Strategy 2: Exact match in targets_by_id: %s", target_ref)
                 return target_ref
+            
             if target_ref in self.targets_by_name:
-                return self.targets_by_name[target_ref].get("targetId")
+                result = self.targets_by_name[target_ref].get("targetId")
+                logger.debug("[StepEnricher] Strategy 2: Exact match in targets_by_name: %s", target_ref)
+                return result
 
             # Try fuzzy matching (camelCase to SNAKE_CASE)
             uppercase_ref = re.sub(r'(?<!^)(?=[A-Z])', '_', target_ref).upper()
             if uppercase_ref in self.targets_by_id:
+                logger.debug("[StepEnricher] Strategy 2: Fuzzy match transformed (%s -> %s)", target_ref, uppercase_ref)
                 return uppercase_ref
 
+        # Strategy 3: NEW - CallGraph resolution for navigation
+        if step.get("action") == "navigate" and self.call_graph and step.get("page_class"):
+            try:
+                logger.debug("[StepEnricher] Strategy 3: Attempting CallGraph resolution for navigate action")
+                
+                page_class = step.get("page_class")
+                method_name = step.get("method_name") or step.get("name")
+                
+                if method_name:
+                    # Resolve method definition
+                    method_def = self.call_graph.resolve_method_definition(page_class, method_name)
+                    
+                    if method_def:
+                        # Find driver.get() calls inside method
+                        get_calls = self.call_graph.find_internal_calls(
+                            page_class, method_name, "get", "driver"
+                        )
+                        
+                        if get_calls:
+                            # Extract URL from first get call
+                            url = self._extract_url_from_node(get_calls[0])
+                            if url:
+                                # Try to match URL to navigation target
+                                nav_target_id = self._find_navigation_target_by_url(url)
+                                if nav_target_id:
+                                    logger.debug("[StepEnricher] Strategy 3: Resolved via CallGraph: %s -> %s", 
+                                               method_name, nav_target_id)
+                                    return nav_target_id
+            except Exception as e:
+                logger.debug("[StepEnricher] Strategy 3 failed: %s", e)
+
+        # Strategy 4: Mark as unresolved
+        logger.debug("[StepEnricher] Could not resolve targetId for step with action=%s, target_name_id=%s",
+                    step.get("action"), target_ref)
+        return None
+
+    def _extract_url_from_node(self, node) -> Optional[str]:
+        """Extract URL from a driver.get() node."""
+        if not hasattr(node, 'children'):
+            return None
+        
+        for child in node.children:
+            value = child.properties.get("value") if hasattr(child, 'properties') else None
+            if value and isinstance(value, str):
+                if value.startswith("http://") or value.startswith("https://"):
+                    return value
+        
+        return None
+
+    def _find_navigation_target_by_url(self, url: str) -> Optional[str]:
+        """Find navigation target in extracted_targets that matches URL."""
+        for target in self.extracted_targets:
+            if target.get("type") == "navigation":
+                target_url = target.get("target", {}).get("value")
+                if target_url == url:
+                    return target.get("targetId")
+        
         return None
 
     def _build_step_input(self, step: Dict, test_data: Optional[Dict] = None) -> Optional[Dict]:
