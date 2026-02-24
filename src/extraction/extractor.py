@@ -33,6 +33,13 @@ class IRExtractor:
         self.action_mapper = ActionMapper()  # Default with no symbol table
         self.symbol_table = SymbolTable()  # Will be built per AST tree
 
+        # Optional cross-file analysis helpers (populated by pipeline when available)
+        self.cross_index = None
+        self.type_resolver = None
+        self.call_graph = None
+        self.data_flow = None
+        self.wrapper_expander = None
+
     def extract(
         self,
         ast_tree: ASTTree,
@@ -42,8 +49,28 @@ class IRExtractor:
 
         logger.info("Starting extraction for project: %s", project_name)
 
-        # Build symbol table first for this AST tree
+        # If a shared symbol_table was injected by the pipeline, reuse it.
+        # Otherwise build a fresh one for this tree and attach available helpers.
+        if getattr(self, "symbol_table", None) is None:
+            self.symbol_table = SymbolTable(
+                cross_index=self.cross_index,
+                data_flow=self.data_flow,
+                type_resolver=self.type_resolver,
+            )
+
+        # Ensure the symbol table is aware of cross-file helpers
+        try:
+            # assign helpers if symbol_table supports them
+            self.symbol_table.cross_index = self.cross_index
+            self.symbol_table.data_flow = self.data_flow
+            self.symbol_table.type_resolver = self.type_resolver
+        except Exception:
+            pass
+
+        # Build/update symbol table from the current tree (may augment existing)
         self.symbol_table.build_from_tree(ast_tree)
+
+        # Ensure ActionMapper uses the updated symbol table
         self.action_mapper = ActionMapper(symbol_table=self.symbol_table)
 
         extracted_tests: List[Dict] = []

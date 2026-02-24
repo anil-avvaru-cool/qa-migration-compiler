@@ -19,6 +19,7 @@ from src.ir.models.test import TestIR
 from src.ir.models.suite import SuiteIR
 from src.ir.models.targets import TargetIR
 from src.ast.models import ASTNode, ASTLocation, ASTTree
+from src.extraction.action_mapper import ActionMapper
 
 # Phase 2 additions
 # from src.ir.validator.schema_validator import SchemaValidator
@@ -84,7 +85,8 @@ class IRGenerationPipeline:
         all_environments: List[dict] = []
         all_targets: List[dict] = []
 
-        # Deterministic ordering
+        # First pass: parse & adapt all source files to build corpus-level analyzers
+        ast_trees = []
         for file_path in sorted(source_files):
             logger.info("Processing file: %s", file_path)
 
@@ -101,7 +103,41 @@ class IRGenerationPipeline:
                 language=source_language,
                 file_path=file_path)
 
-            # 3️⃣ Extract Domain Model
+            ast_trees.append(ast_tree)
+
+        # Build cross-file analysis helpers
+        from src.ast.cross_index import CrossASTIndex
+        from src.analysis.type_hierarchy import TypeHierarchyResolver
+        from src.analysis.call_graph import CallGraphBuilder
+        from src.analysis.data_flow import DataFlowAnalyzer
+        from src.analysis.wrapper_expansion import WrapperExpander
+
+        cross_index = CrossASTIndex(ast_trees)
+        type_resolver = TypeHierarchyResolver(ast_trees)
+        call_graph = CallGraphBuilder(ast_trees)
+        data_flow = DataFlowAnalyzer(ast_trees)
+        wrapper_expander = WrapperExpander(ast_trees)
+
+        # Inject helpers into extractor
+        try:
+            self.extractor.cross_index = cross_index
+            self.extractor.type_resolver = type_resolver
+            self.extractor.call_graph = call_graph
+            self.extractor.data_flow = data_flow
+            self.extractor.wrapper_expander = wrapper_expander
+        except Exception:
+            pass
+
+        # Create a shared symbol table seeded with corpus helpers
+        from src.analysis.symbol_table import SymbolTable
+        shared_symbol_table = SymbolTable(cross_index=cross_index, data_flow=data_flow, type_resolver=type_resolver)
+        self.extractor.symbol_table = shared_symbol_table
+        self.extractor.action_mapper = ActionMapper(symbol_table=shared_symbol_table)
+
+        # Second pass: run extraction using the prepared helpers
+        for ast_tree in ast_trees:
+            logger.info("Extracting file: %s", ast_tree.file_path)
+
             extraction_result = self.extractor.extract(
                 ast_tree,
                 project_name=project_name,
@@ -126,6 +162,7 @@ class IRGenerationPipeline:
         environment_names = [env.get("name") for env in all_environments]
 
         # 4️⃣ Build Project IR
+        # Note: We build project_ir first, then populate it with tests/suites/envs later
         project_ir = self.ir_builder.build(
             project_name=project_name,
             source_framework=source_language,
@@ -133,6 +170,9 @@ class IRGenerationPipeline:
             architecture_pattern="POM",
             supports_parallel=True,
             ir_version="2.0.0",
+            source_language=source_language,
+            target_language=target_framework,
+            compiler_version="1.0.0",
         )
 
         # 5️⃣ Build detailed IR models (tests, suites, targets, environments, data)
@@ -222,6 +262,18 @@ class IRGenerationPipeline:
         data_ir: List[TestDataIR] = []
 
         logger.info("IR build completed")
+
+        # Update project_ir with suites, tests, and environments (convert to dicts for storage)
+        from pydantic import BaseModel
+        project_ir_dict = project_ir.model_dump()
+        project_ir_dict["suites"] = [s.model_dump() for s in suites_ir]
+        project_ir_dict["tests"] = [t.model_dump() for t in tests_ir]
+        project_ir_dict["environments"] = [e.model_dump() for e in environments_ir]
+        project_ir_dict["metadata"]["source_language"] = source_language
+        project_ir_dict["metadata"]["source_language"] = source_language
+        
+        # Reconstruct project_ir as frozen=True prevents direct modification
+        project_ir = ProjectIR(**project_ir_dict)
 
         # 5️⃣ Optional Schema Validation
         # if self.validator:

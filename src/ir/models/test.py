@@ -72,3 +72,8 @@ class TestIR(BaseModel):
     tags: List[str] = Field(default_factory=list, description="Test tags/labels")
 
     model_config = ConfigDict(frozen=True)
+
+    @property
+    def name(self) -> str:
+        """Alias for testId for backward compatibility."""
+        return self.testId

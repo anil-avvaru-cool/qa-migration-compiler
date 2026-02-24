@@ -11,8 +11,18 @@ Responsibility:
 """
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 from src.ast.models import ASTNode, ASTTree
+
+# Optional analysis helpers (avoid hard dependency cycles at import-time)
+try:
+    from src.ast.cross_index import CrossASTIndex
+    from src.analysis.data_flow import DataFlowAnalyzer
+    from src.analysis.type_hierarchy import TypeHierarchyResolver
+except Exception:
+    CrossASTIndex = None  # type: ignore
+    DataFlowAnalyzer = None  # type: ignore
+    TypeHierarchyResolver = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +33,12 @@ class SymbolTable:
     and resolves references to them.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        cross_index: "CrossASTIndex" = None,
+        data_flow: "DataFlowAnalyzer" = None,
+        type_resolver: "TypeHierarchyResolver" = None,
+    ):
         # Maps variable/field name -> AST node of the initializer value
         # Example: "username" -> node of By.cssSelector("#username")
         self.symbols: Dict[str, ASTNode] = {}
@@ -36,6 +51,11 @@ class SymbolTable:
         # Maps class/type name -> field initializers
         # Example: "LoginPage" -> {"emailInput": locator_node, ...}
         self.class_fields: Dict[str, Dict[str, ASTNode]] = {}
+
+        # Optional cross-file analysis helpers
+        self.cross_index = cross_index
+        self.data_flow = data_flow
+        self.type_resolver = type_resolver
 
     def build_from_tree(self, ast_tree: ASTTree) -> None:
         """
@@ -60,6 +80,18 @@ class SymbolTable:
         
         # Second pass: infer method targets from field names and method signatures
         self._infer_method_targets(ast_tree)
+
+        # If a cross-file dataflow helper exists, attempt to discover additional
+        # locator initializers that may be declared in other files
+        if self.data_flow is not None:
+            # augment symbols with any missing entries using the data flow search
+            for class_map in self.class_fields.values():
+                for field_name in list(class_map.keys()):
+                    if field_name not in self.symbols:
+                        found = self.data_flow.find_locator_for_symbol(field_name)
+                        if found:
+                            self.symbols[field_name] = found
+                            logger.debug(f"[SymbolTable] Cross-file discovered {field_name} -> {found.id}")
 
         logger.info(
             "Symbol table built: %d symbols, %d methods, %d classes",
@@ -91,6 +123,14 @@ class SymbolTable:
                     logger.debug(f"Recorded symbol: {var_name} -> {descendant.id}")
                     return
 
+        # If not found locally, consult data-flow (cross-file) if available
+        if self.data_flow is not None:
+            found = self.data_flow.find_locator_for_symbol(var_name)
+            if found:
+                self.symbols[var_name] = found
+                logger.debug(f"Recorded symbol (from dataflow): {var_name} -> {found.id}")
+                return
+
     def _is_locator_node(self, node: ASTNode) -> bool:
         """Check if node is a By.* locator call."""
         qualifier = node.properties.get("qualifier")
@@ -117,6 +157,17 @@ class SymbolTable:
         # Try member (method/field name)
         if member and member in self.symbols:
             return (member, self.symbols[member])
+
+        # If not found locally, try data-flow cross-tree lookup
+        if name and self.data_flow is not None:
+            found = self.data_flow.find_locator_for_symbol(name)
+            if found:
+                return (name, found)
+
+        if member and self.data_flow is not None:
+            found = self.data_flow.find_locator_for_symbol(member)
+            if found:
+                return (member, found)
 
         return None
 
@@ -175,6 +226,10 @@ class SymbolTable:
         
         if class_fields:
             self.class_fields[class_name] = class_fields
+            # also seed global symbols map
+            for k, v in class_fields.items():
+                if k not in self.symbols:
+                    self.symbols[k] = v
     
     def _infer_method_targets(self, ast_tree: ASTTree) -> None:
         """

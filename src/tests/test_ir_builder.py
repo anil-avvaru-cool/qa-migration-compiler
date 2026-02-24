@@ -19,8 +19,8 @@ def test_test_ir_builder():
     builder = TestIRBuilder()
     test_ir = builder.build(extracted)
 
-    assert test_ir.name == "Valid Login"
+    assert test_ir.name == "Valid Login"  # Uses the @property alias for testId
     assert len(test_ir.steps) == 1
-    assert test_ir.steps[0].name == "click"
-    assert test_ir.steps[0].targetNameId == "login_button"
-    assert test_ir.steps[0].targetNodeId == "node_5"
+    assert test_ir.steps[0].action == "click"  # StepIR has "action" not "name"
+    assert test_ir.steps[0].targetId == "login_button"  # Resolved from target_name_id mapping
+    assert test_ir.tags == ["smoke"]

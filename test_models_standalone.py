@@ -28,7 +28,7 @@ except ImportError:
 test_passed = 0
 test_failed = 0
 
-def test(name, func):
+def run_test(name, func):
     """Simple test runner."""
     global test_passed, test_failed
     try:
@@ -195,33 +195,38 @@ def test_json_schema_examples():
         if valid_count == 0:
             raise ValueError("No valid JSON examples found in documentation")
 
-# Run all tests
-print("\n" + "="*60)
-print("IR Model Enhancement - Standalone Test Runner")
-print("="*60 + "\n")
+def _run_all():
+    # Run all tests (when executed as a script)
+    print("\n" + "="*60)
+    print("IR Model Enhancement - Standalone Test Runner")
+    print("="*60 + "\n")
 
-print("File Structure Tests:")
-test("Models directory exists and has required files", test_models_exist)
-test("Builders directory exists and has required files", test_builders_exist)
-test("Changelog files created", test_changelog_files_exist)
+    print("File Structure Tests:")
+    run_test("Models directory exists and has required files", test_models_exist)
+    run_test("Builders directory exists and has required files", test_builders_exist)
+    run_test("Changelog files created", test_changelog_files_exist)
 
-print("\nSyntax Validation Tests:")
-test("Model files have valid Python syntax", test_models_syntax)
-test("Builder files have valid Python syntax", test_builders_syntax)
-test("Test files have valid Python syntax", test_test_files_syntax)
+    print("\nSyntax Validation Tests:")
+    run_test("Model files have valid Python syntax", test_models_syntax)
+    run_test("Builder files have valid Python syntax", test_builders_syntax)
+    run_test("Test files have valid Python syntax", test_test_files_syntax)
 
-print("\nSchema Compliance Tests:")
-test("Models follow Pydantic conventions", test_model_pydantic_compatibility)
-test("Builders implement required logic", test_builder_logic)
-test("JSON schema examples are valid", test_json_schema_examples)
+    print("\nSchema Compliance Tests:")
+    run_test("Models follow Pydantic conventions", test_model_pydantic_compatibility)
+    run_test("Builders implement required logic", test_builder_logic)
+    run_test("JSON schema examples are valid", test_json_schema_examples)
 
-print("\n" + "="*60)
-print(f"Test Results: {test_passed} passed, {test_failed} failed")
-print("="*60 + "\n")
+    print("\n" + "="*60)
+    print(f"Test Results: {test_passed} passed, {test_failed} failed")
+    print("="*60 + "\n")
 
-if test_failed == 0:
-    print("✓ All tests passed!")
-    sys.exit(0)
-else:
-    print(f"✗ {test_failed} test(s) failed!")
-    sys.exit(1)
+    if test_failed == 0:
+        print("✓ All tests passed!")
+        sys.exit(0)
+    else:
+        print(f"✗ {test_failed} test(s) failed!")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    _run_all()
