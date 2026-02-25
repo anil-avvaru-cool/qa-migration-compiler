@@ -131,7 +131,9 @@ class IRGenerationPipeline:
         # Create a shared symbol table seeded with corpus helpers
         from src.analysis.symbol_table import SymbolTable
         shared_symbol_table = SymbolTable(cross_index=cross_index, data_flow=data_flow, type_resolver=type_resolver)
+        logger.info("Created shared SymbolTable instance id=%s", id(shared_symbol_table))
         self.extractor.symbol_table = shared_symbol_table
+        logger.info("Injected shared SymbolTable into extractor (extractor_id=%s symbol_table_id=%s)", id(self.extractor), id(self.extractor.symbol_table))
         self.extractor.action_mapper = ActionMapper(symbol_table=shared_symbol_table)
 
         # Second pass: run extraction using the prepared helpers
@@ -157,10 +159,6 @@ class IRGenerationPipeline:
                 len(extraction_result["environments"]),
             )
         
-        test_names = [test["name"] for test in all_tests]
-        suite_names = [suite["name"] for suite in all_suites]
-        environment_names = [env.get("name") for env in all_environments]
-
         # 4️⃣ Build Project IR
         # Note: We build project_ir first, then populate it with tests/suites/envs later
         project_ir = self.ir_builder.build(

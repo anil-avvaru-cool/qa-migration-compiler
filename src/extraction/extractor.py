@@ -68,6 +68,7 @@ class IRExtractor:
             pass
 
         # Build/update symbol table from the current tree (may augment existing)
+        logger.info("Using symbol_table instance id=%s type=%s", id(self.symbol_table), f"{type(self.symbol_table).__module__}.{type(self.symbol_table).__name__}")
         self.symbol_table.build_from_tree(ast_tree)
 
         # Ensure ActionMapper uses the updated symbol table
@@ -93,7 +94,7 @@ class IRExtractor:
 
             if node.type == "test":
                 extracted_test = self._extract_test(node)
-                logger.debug(f"Extracted test***: {extracted_test}")
+                logger.debug(f"Extracted test: {extracted_test}")
                 extracted_tests.append(extracted_test)
 
             elif node.type == "suite":

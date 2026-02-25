@@ -64,7 +64,7 @@ class SymbolTable:
         2. Page object class structure (fields and methods)
         3. Method -> target mappings (inferred from method names and usage)
         """
-        logger.info("Building symbol table from AST tree")
+        logger.info("Building symbol table from AST tree: %s", getattr(ast_tree, 'file_path', 'unknown'))
 
         # First pass: record all symbols and class structure
         for node in ast_tree.walk():
@@ -74,8 +74,8 @@ class SymbolTable:
             # Also check method argument declarations
             elif node.type == "parameter":
                 self._record_field_initializer(node)
-            # Record page object classes
-            elif node.type == "suite":
+            # Record page object classes (accept both `suite` and `class` types)
+            elif node.type in ("suite", "class"):
                 self._record_class_structure(node)
         
         # Second pass: infer method targets from field names and method signatures
@@ -99,6 +99,9 @@ class SymbolTable:
             len(self.method_targets),
             len(self.class_fields),
         )
+        logger.debug(f"Symbols from symbol_table.py: {list(self.symbols.keys())}")
+        logger.debug(f"Method targets from symbol_table.py: {list(self.method_targets.keys())}")
+        logger.debug(f"Classes from symbol_table.py: {list(self.class_fields.keys())}")
 
     def _record_field_initializer(self, var_node: ASTNode) -> None:
         """
@@ -207,29 +210,61 @@ class SymbolTable:
         This enables us to understand what targets a class provides.
         """
         class_name = class_node.name
+        logger.debug(f"_record_class_structure called for node id={class_node.id} name={class_name} child_count={len(getattr(class_node, 'children', []))}")
         if not class_name:
+            logger.debug(f"Skipping class node {class_node.id} because name is missing")
+            return
+        
+        # Skip test suites (they don't have field declarations)
+        # Test suites have names ending in "Test", "Tests", "Suite"
+        if class_name.endswith("Test") or class_name.endswith("Tests") or class_name.endswith("Suite"):
+            logger.debug(f"Skipping test suite {class_name} (not a page object)")
             return
         
         class_fields = {}
+        field_count = 0
+        locator_count = 0
+
+        # Find all field initializers in this class subtree (fields may be nested)
+        for descendant in self._walk(class_node):
+            if descendant.type == "field":
+                field_count += 1
+                # Field nodes don't have names; get name from first variable child
+                field_name = None
+                for child in descendant.children:
+                    if child.type == "variable":
+                        field_name = child.name
+                        break
+                
+                logger.debug(f"[{class_name}] Found field node id={descendant.id} field_name={field_name}")
+                if not field_name:
+                    logger.debug(f"[{class_name}] Skipping field with no name (no variable child)")
+                    continue
+
+                # Look for By.* locator initializer under the field node
+                found_locator = False
+                for node in self._walk(descendant):
+                    if self._is_locator_node(node):
+                        locator_count += 1
+                        class_fields[field_name] = node
+                        logger.debug(f"[{class_name}] Found locator in field {field_name}: {node.id} (qualifier={node.properties.get('qualifier')} member={node.properties.get('member')})")
+                        found_locator = True
+                        break
+                
+                if not found_locator:
+                    logger.debug(f"[{class_name}] Field {field_name} has no locator node in subtree")
         
-        # Find all field initializers in this class
-        for child in class_node.children:
-            if child.type == "field":
-                field_name = child.name
-                if field_name:
-                    # Look for By.* locator initializer
-                    for descendant in self._walk(child):
-                        if self._is_locator_node(descendant):
-                            class_fields[field_name] = descendant
-                            logger.debug(f"Class {class_name} field: {field_name}")
-                            break
+        logger.info(f"[{class_name}] Walk complete: {field_count} field nodes, {locator_count} locators found")
         
         if class_fields:
             self.class_fields[class_name] = class_fields
+            logger.info(f"Recorded page object class {class_name} with {len(class_fields)} fields")
             # also seed global symbols map
             for k, v in class_fields.items():
                 if k not in self.symbols:
                     self.symbols[k] = v
+        else:
+            logger.warning(f"[{class_name}] NO FIELDS RECORDED - class_fields dict is empty after walk")
     
     def _infer_method_targets(self, ast_tree: ASTTree) -> None:
         """
